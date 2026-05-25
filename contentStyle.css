@@ -74,3 +74,15 @@
   opacity: 1;
   transform: translateY(0);
 }
+
+.click-notes-selected {
+  outline: 2px solid #111827 !important;
+  outline-offset: 2px !important;
+}
+
+#click-notes-modal .target-summary {
+  font-size: 11px;
+  color: #4b5563;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}

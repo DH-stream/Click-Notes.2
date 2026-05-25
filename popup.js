@@ -12,34 +12,78 @@ async function getActiveTab() {
   return tab;
 }
 
+async function ensureInjected(tabId) {
+  await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentStyle.css"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["contentScript.js"] });
+}
+
 async function sendToActiveTab(type, payload = {}) {
   const tab = await getActiveTab();
   if (!tab?.id) throw new Error("No active tab found");
+
+  if (type === "CLICK_NOTES_TOGGLE_CAPTURE") {
+    await ensureInjected(tab.id);
+  }
+
   return chrome.tabs.sendMessage(tab.id, { type, ...payload });
+}
+
+function quoted(value) {
+  return value ? `"${value}"` : "n/a";
+}
+
+function formatImplementationClues(note) {
+  const clues = [];
+  if (note.text) clues.push(`- Search repo for visible text: ${quoted(note.text)}`);
+  if (note.ariaLabel) clues.push(`- Search repo for aria-label: ${quoted(note.ariaLabel)}`);
+  if (note.id) clues.push(`- Search repo for id: ${quoted(note.id)}`);
+  if (Array.isArray(note.classList) && note.classList.length) clues.push(`- Search repo for class names: ${note.classList.slice(0, 4).join(", ")}`);
+  if (note.selector) clues.push(`- Search repo for selector: ${quoted(note.selector)}`);
+  if (note.pathname) clues.push(`- Search route/page: ${note.pathname}`);
+  return clues.length ? clues : ["- No strong implementation clues found"]; 
 }
 
 function formatNoteBlock(note, index) {
   const lines = [
     `### Note ${index + 1}`,
     "",
-    "Element:",
+    "Target:",
     `- Tag: ${note.tagName || "n/a"}`,
     `- Selector: ${note.selector || "n/a"}`,
-    `- Text: ${note.text || ""}`,
+    `- Fallback path: ${note.fallbackPath || "n/a"}`,
+    `- Text: ${note.text || "n/a"}`,
+    `- Role: ${note.role || "n/a"}`,
+    `- Aria label: ${note.ariaLabel || "n/a"}`,
+    `- Title attribute: ${note.titleAttr || "n/a"}`,
+    `- Name: ${note.nameAttr || "n/a"}`,
+    `- Type: ${note.typeAttr || "n/a"}`,
+    `- Placeholder: ${note.placeholder || "n/a"}`,
+    `- Href: ${note.href || "n/a"}`,
+    `- Src: ${note.src || "n/a"}`,
+    `- Id: ${note.id || "n/a"}`,
+    `- Class list: ${(note.classList || []).join(" ") || "n/a"}`,
     `- Position: x=${note.rect?.x ?? "?"} y=${note.rect?.y ?? "?"} w=${note.rect?.width ?? "?"} h=${note.rect?.height ?? "?"}`,
+    "",
+    "Nearby context:",
+    `- Parent text: ${note.parentText || "n/a"}`,
+    `- Section text: ${note.sectionText || "n/a"}`,
+    `- Route: ${note.pathname || "n/a"}`,
+    "",
+    "Visual clues:",
+    `- Color: ${note.visual?.color || "n/a"}`,
+    `- Background: ${note.visual?.backgroundColor || "n/a"}`,
+    `- Font size: ${note.visual?.fontSize || "n/a"}`,
+    `- Font weight: ${note.visual?.fontWeight || "n/a"}`,
+    `- Border radius: ${note.visual?.borderRadius || "n/a"}`,
+    `- Box shadow: ${note.visual?.boxShadow || "n/a"}`,
+    "",
+    "Implementation clues:",
+    ...formatImplementationClues(note),
     "",
     "Comment:",
     note.comment,
     ""
   ];
-
-  const attrs = [];
-  ["dataNote", "dataComponent", "dataTestid", "dataCy", "id"].forEach((key) => {
-    if (note[key]) attrs.push(`- ${key}: ${note[key]}`);
-  });
-  if (attrs.length) {
-    lines.splice(8, 0, "Metadata:", ...attrs, "");
-  }
 
   return lines.join("\n");
 }
@@ -60,7 +104,6 @@ function buildMarkdown(notes) {
     lines.push(`Title: ${pageNotes[0].title || "Untitled"}`);
     lines.push(`Viewport: ${pageNotes[0].viewport?.width || "?"}x${pageNotes[0].viewport?.height || "?"}`);
     lines.push("");
-
     pageNotes.forEach((note, idx) => lines.push(formatNoteBlock(note, idx)));
   });
 
@@ -73,7 +116,9 @@ async function refresh() {
     toggleCaptureBtn.textContent = state?.captureEnabled ? "Stop capture" : "Start capture";
     setStatus(`${state?.noteCount || 0} saved notes`);
   } catch {
-    setStatus("Open a localhost or Vercel page");
+    toggleCaptureBtn.textContent = "Start capture";
+    const { notes } = await chrome.storage.local.get({ notes: [] });
+    setStatus(`${notes.length} saved notes`);
   }
 }
 
@@ -83,7 +128,7 @@ toggleCaptureBtn.addEventListener("click", async () => {
     toggleCaptureBtn.textContent = result.captureEnabled ? "Stop capture" : "Start capture";
     setStatus(result.captureEnabled ? "Capture enabled" : "Capture stopped");
   } catch {
-    setStatus("Could not toggle capture here");
+    setStatus("Could not start capture on this tab");
   }
 });
 
