@@ -1,0 +1,54 @@
+.click-notes-highlight {
+  outline: 2px solid #2563eb !important;
+  outline-offset: 2px !important;
+  cursor: crosshair !important;
+}
+
+#click-notes-modal {
+  position: fixed;
+  z-index: 2147483647;
+  width: 280px;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  padding: 10px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#click-notes-modal textarea {
+  width: 100%;
+  min-height: 84px;
+  box-sizing: border-box;
+  padding: 8px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  resize: vertical;
+}
+
+#click-notes-modal .actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#click-notes-modal button {
+  border: none;
+  border-radius: 6px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#click-notes-save {
+  background: #2563eb;
+  color: white;
+}
+
+#click-notes-cancel {
+  background: #e5e7eb;
+  color: #111827;
+}

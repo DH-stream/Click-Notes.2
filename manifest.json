@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Click Notes",
+  "description": "Capture quick visual UI notes on localhost and Vercel pages.",
+  "version": "0.1.0",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://*.vercel.app/*"
+  ],
+  "action": {
+    "default_title": "Click Notes",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost/*",
+        "http://127.0.0.1/*",
+        "https://*.vercel.app/*"
+      ],
+      "js": ["contentScript.js"],
+      "css": ["contentStyle.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
