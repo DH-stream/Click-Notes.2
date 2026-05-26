@@ -3,10 +3,14 @@ const stopBtn = document.getElementById("stopBtn");
 const copyBtn = document.getElementById("copyBtn");
 const clearBtn = document.getElementById("clearBtn");
 const notesList = document.getElementById("notesList");
+const statusDot = document.getElementById("statusDot");
+const headerLabel = document.getElementById("headerLabel");
 
 function setRecordingUI(isRecording) {
   recordBtn.style.display = isRecording ? "none" : "block";
   stopBtn.style.display = isRecording ? "block" : "none";
+  if (statusDot) statusDot.classList.toggle("recording", isRecording);
+  if (headerLabel) headerLabel.textContent = isRecording ? "Recording…" : "Click Notes";
 }
 
 function setCopyLabel(noteCount) {
@@ -56,8 +60,18 @@ function renderNotePreviews(notes) {
   notes.forEach((note, idx) => {
     const row = document.createElement("div");
     row.className = "note-row";
-    const text = (note.comment || "").replace(/\s+/g, " ").trim().slice(0, 48);
+    const text = (note.comment || "").trim();
     row.innerHTML = `<span class="num">${idx + 1}</span><span class="text">${text}</span>`;
+    row.title = "Click to edit";
+    row.style.cursor = "pointer";
+    row.addEventListener("click", async () => {
+      try {
+        const tab = await getActiveTab();
+        if (!tab?.id) return;
+        await chrome.tabs.sendMessage(tab.id, { type: "CLICK_NOTES_EDIT_NOTE", noteIndex: idx });
+        window.close(); // close popup so user can see the edit modal on the page
+      } catch {}
+    });
     notesList.appendChild(row);
   });
 }
@@ -162,7 +176,13 @@ copyBtn.addEventListener("click", async () => {
 
 clearBtn.addEventListener("click", async () => {
   await chrome.storage.local.set({ notes: [] });
-  try { await sendToActiveTab("CLICK_NOTES_CLEAR_PINS"); } catch {}
+  try {
+    const tab = await getActiveTab();
+    if (tab?.id) {
+      await ensureInjected(tab.id);
+      await chrome.tabs.sendMessage(tab.id, { type: "CLICK_NOTES_CLEAR_PINS" });
+    }
+  } catch {}
   await flashButton(clearBtn, "Cleared", "Clear");
   await refresh();
 });

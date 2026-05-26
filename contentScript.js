@@ -9,19 +9,42 @@
   let pinLayer = null;
   let overlaySyncRaf = null;
 
+  function safeStorage(fn) {
+    try {
+      if (!chrome?.runtime?.id) return;
+      fn();
+    } catch (e) {
+      if (e?.message?.includes("Extension context invalidated")) return;
+      throw e;
+    }
+  }
+
   function escapeCssValue(value) {
     if (!value) return "";
-    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(value);
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function")
+      return CSS.escape(value);
     return value.replace(/(["\\#.:\[\]\s>+~])/g, "\\$1");
   }
 
   function isLikelyGeneratedClassName(className) {
-    return /^click-notes-/.test(className) || /^css-/.test(className) || /^r-/.test(className);
+    return (
+      /^click-notes-/.test(className) ||
+      /^css-/.test(className) ||
+      /^r-/.test(className)
+    );
   }
 
   function getStableClass(element) {
     const classes = Array.from(element.classList || []);
-    return classes.find((cls) => cls.length >= 3 && /^[a-zA-Z0-9_-]+$/.test(cls) && !/^\d/.test(cls) && !isLikelyGeneratedClassName(cls)) || "";
+    return (
+      classes.find(
+        (cls) =>
+          cls.length >= 3 &&
+          /^[a-zA-Z0-9_-]+$/.test(cls) &&
+          !/^\d/.test(cls) &&
+          !isLikelyGeneratedClassName(cls),
+      ) || ""
+    );
   }
 
   function buildFallbackPath(element) {
@@ -39,7 +62,9 @@
         segments.unshift(tag);
         break;
       }
-      const sameTag = Array.from(parent.children).filter((n) => n.tagName === current.tagName);
+      const sameTag = Array.from(parent.children).filter(
+        (n) => n.tagName === current.tagName,
+      );
       const index = Math.max(1, sameTag.indexOf(current) + 1);
       segments.unshift(`${tag}:nth-of-type(${index})`);
       current = parent;
@@ -56,12 +81,49 @@
     }
     if (element.id) return `#${escapeCssValue(element.id)}`;
     const stableClass = getStableClass(element);
-    if (stableClass) return `${element.tagName.toLowerCase()}.${escapeCssValue(stableClass)}`;
+    if (stableClass)
+      return `${element.tagName.toLowerCase()}.${escapeCssValue(stableClass)}`;
     return buildFallbackPath(element) || element.tagName.toLowerCase();
   }
 
+  function getSelectorConfidence(element, selector) {
+    if (
+      element.dataset?.note ||
+      element.dataset?.component ||
+      element.dataset?.testid ||
+      element.dataset?.cy
+    )
+      return "strong";
+    if (element.id) return "strong";
+    if (selector.startsWith("button.") || selector.startsWith("a.")) {
+      const cls = selector.split(".")[1];
+      if (
+        cls &&
+        !/^(mt|mb|ml|mr|mx|my|pt|pb|pl|pr|px|py|text|font|flex|grid|gap|bg|border|rounded|shadow|w-|h-|p-|m-|items|justify|tracking|leading|overflow|z-|top|left|right|bottom|sr-)/.test(
+          cls,
+        )
+      )
+        return "strong";
+    }
+    return "weak";
+  }
+
+  function suggestDataNote(element) {
+    const tag = element.tagName.toLowerCase();
+    const text = (element.innerText || element.getAttribute("aria-label") || "")
+      .replace(/\s+/g, "-")
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "")
+      .slice(0, 32)
+      .replace(/-+$/, "");
+    const base = text || tag;
+    return `data-note="${base}"`;
+  }
+
   function getTargetElement(element) {
-    const clickable = element.closest('button, a, [role="button"], input, label, textarea, select');
+    const clickable = element.closest(
+      'button, a, [role="button"], input, label, textarea, select',
+    );
     return clickable || element;
   }
 
@@ -74,7 +136,6 @@
     const section = element.closest(selector);
     return getTextSnippet(section?.innerText || parent?.innerText || "", 220);
   }
-
 
   function getPageKey(url) {
     try {
@@ -95,33 +156,42 @@
   function resolveNoteRect(note) {
     const targetId = note.targetId || "";
     if (targetId) {
-      const target = document.querySelector(`[data-click-notes-target-id="${escapeCssValue(targetId)}"]`);
+      const target = document.querySelector(
+        `[data-click-notes-target-id="${escapeCssValue(targetId)}"]`,
+      );
       if (target instanceof HTMLElement) {
         const rect = target.getBoundingClientRect();
         return {
           x: Math.round(rect.x + window.scrollX),
           y: Math.round(rect.y + window.scrollY),
           width: Math.round(rect.width),
-          height: Math.round(rect.height)
+          height: Math.round(rect.height),
         };
       }
     }
     if (!note.rect) return null;
     return {
-      x: typeof note.rect.documentX === "number" ? note.rect.documentX : Math.round((note.rect.x || 0) + window.scrollX),
-      y: typeof note.rect.documentY === "number" ? note.rect.documentY : Math.round((note.rect.y || 0) + window.scrollY),
+      x:
+        typeof note.rect.documentX === "number"
+          ? note.rect.documentX
+          : Math.round((note.rect.x || 0) + window.scrollX),
+      y:
+        typeof note.rect.documentY === "number"
+          ? note.rect.documentY
+          : Math.round((note.rect.y || 0) + window.scrollY),
       width: Math.round(note.rect.width || 0),
-      height: Math.round(note.rect.height || 0)
+      height: Math.round(note.rect.height || 0),
     };
   }
 
   async function renderPinsForCurrentPage() {
+    if (!chrome?.runtime?.id) return;
     const layer = ensurePinLayer();
     layer.innerHTML = "";
     const { notes } = await chrome.storage.local.get({ notes: [] });
     const pageKey = getPageKey(window.location.href);
     let pinNumber = 0;
-    notes.forEach((note) => {
+    notes.forEach((note, noteIndex) => {
       if (getPageKey(note.url) !== pageKey) return;
       const rect = resolveNoteRect(note);
       if (!rect) return;
@@ -140,10 +210,19 @@
       overlay.appendChild(badge);
 
       const pin = document.createElement("div");
-      pin.className = "click-notes-pin";
+      pin.className = "click-notes-pin click-notes-pin-clickable";
       pin.textContent = String(pinNumber);
       pin.style.left = `${Math.max(8, rect.x - 10)}px`;
       pin.style.top = `${Math.max(8, rect.y - 10)}px`;
+      pin.title = note.comment || "";
+      pin.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        if (modalOpen) return;
+        const pinRect = pin.getBoundingClientRect();
+        openEditModal(noteIndex, pinRect.right + 8, pinRect.top);
+      });
 
       layer.appendChild(overlay);
       layer.appendChild(pin);
@@ -154,12 +233,13 @@
     if (overlaySyncRaf) return;
     overlaySyncRaf = requestAnimationFrame(() => {
       overlaySyncRaf = null;
-      renderPinsForCurrentPage();
+      if (chrome?.runtime?.id) renderPinsForCurrentPage();
     });
   }
 
   function clearHighlight() {
-    if (hoveredElement) hoveredElement.classList.remove("click-notes-highlight");
+    if (hoveredElement)
+      hoveredElement.classList.remove("click-notes-highlight");
     hoveredElement = null;
   }
 
@@ -184,7 +264,11 @@
   function onMouseMove(event) {
     if (!captureEnabled || modalOpen) return;
     const target = event.target;
-    if (!(target instanceof HTMLElement) || target.closest("#click-notes-modal")) return;
+    if (
+      !(target instanceof HTMLElement) ||
+      target.closest("#click-notes-modal")
+    )
+      return;
     const resolvedTarget = getTargetElement(target);
     if (hoveredElement !== resolvedTarget) {
       clearHighlight();
@@ -193,15 +277,14 @@
     }
   }
 
-  function getModalPosition(x, y) {
+  function clampToViewport(left, top, width, height) {
     const margin = 12;
-    const width = 280;
-    const height = 220;
-    let left = x + 10;
-    let top = y + 10;
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
-    if (top + height > window.innerHeight - margin) top = window.innerHeight - height - margin;
-    return { left: Math.max(margin, left), top: Math.max(margin, top) };
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    return {
+      left: Math.max(margin, Math.min(left, vw - width - margin)),
+      top: Math.max(margin, Math.min(top, vh - height - margin)),
+    };
   }
 
   function buildNotePayload(element, comment) {
@@ -224,7 +307,9 @@
       href: element.getAttribute("href") || "",
       src: element.getAttribute("src") || "",
       id: element.id || "",
-      classList: Array.from(element.classList || []).filter((cls) => !isLikelyGeneratedClassName(cls)),
+      classList: Array.from(element.classList || []).filter(
+        (cls) => !isLikelyGeneratedClassName(cls),
+      ),
       selector: getElementSelector(element),
       fallbackPath: buildFallbackPath(element),
       rect: {
@@ -233,24 +318,31 @@
         width: Math.round(rect.width),
         height: Math.round(rect.height),
         documentX: Math.round(rect.x + window.scrollX),
-        documentY: Math.round(rect.y + window.scrollY)
+        documentY: Math.round(rect.y + window.scrollY),
       },
-      parentText: getContextText(element, "section, article, main, form, nav, aside"),
-      sectionText: getContextText(element, "section, article, form, [role='region'], [data-testid]"),
+      parentText: getContextText(
+        element,
+        "section, article, main, form, nav, aside",
+      ),
+      sectionText: getContextText(
+        element,
+        "section, article, form, [role='region'], [data-testid]",
+      ),
       visual: {
         color: style.color,
         backgroundColor: style.backgroundColor,
         fontSize: style.fontSize,
         fontWeight: style.fontWeight,
         borderRadius: style.borderRadius,
-        boxShadow: style.boxShadow
+        boxShadow: style.boxShadow,
       },
       comment,
-      targetId: element.dataset.clickNotesTargetId || ""
+      targetId: element.dataset.clickNotesTargetId || "",
     };
   }
 
   async function saveNote(note) {
+    if (!chrome?.runtime?.id) return 0;
     const { notes } = await chrome.storage.local.get({ notes: [] });
     notes.push(note);
     await chrome.storage.local.set({ notes });
@@ -265,13 +357,23 @@
 
     const modal = document.createElement("div");
     modal.id = "click-notes-modal";
-    const { left, top } = getModalPosition(clickX, clickY);
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
+    // Position off-screen first so we can measure actual rendered size
+    modal.style.left = "-9999px";
+    modal.style.top = "-9999px";
 
     const summary = `${target.tagName.toLowerCase()}: ${getTextSnippet(target.innerText || target.getAttribute("aria-label") || getElementSelector(target), 42)}`;
+    const confidence = getSelectorConfidence(
+      target,
+      getElementSelector(target),
+    );
+    const hint =
+      confidence === "weak"
+        ? `<div class="cn-hint">Weak selector — add <code>${suggestDataNote(target)}</code> to this element for a reliable identifier.</div>`
+        : "";
+
     modal.innerHTML = `
       <div class="target-summary">${summary}</div>
+      ${hint}
       <textarea id="click-notes-text" placeholder="Write a quick note..."></textarea>
       <div class="actions">
         <button id="click-notes-cancel" type="button">Cancel</button>
@@ -280,25 +382,50 @@
     `;
 
     document.body.appendChild(modal);
+
+    // Measure actual size, then clamp into viewport
+    const { width: mw, height: mh } = modal.getBoundingClientRect();
+    const { left, top } = clampToViewport(clickX + 10, clickY + 10, mw, mh);
+    modal.style.left = `${left}px`;
+    modal.style.top = `${top}px`;
+
     const textarea = modal.querySelector("#click-notes-text");
     const cancelBtn = modal.querySelector("#click-notes-cancel");
     const saveBtn = modal.querySelector("#click-notes-save");
     textarea.focus();
 
+    // Keep modal clamped within viewport on scroll, resize, or zoom
+    const repositionModal = () => {
+      const mr = modal.getBoundingClientRect();
+      const { left: l, top: t } = clampToViewport(
+        parseFloat(modal.style.left),
+        parseFloat(modal.style.top),
+        mr.width,
+        mr.height,
+      );
+      modal.style.left = `${l}px`;
+      modal.style.top = `${t}px`;
+    };
+    window.addEventListener("resize", repositionModal);
+    window.addEventListener("scroll", repositionModal, { passive: true });
+
     const closeModal = () => {
       modalOpen = false;
       clearSelected();
+      window.removeEventListener("resize", repositionModal);
+      window.removeEventListener("scroll", repositionModal);
       modal.remove();
     };
 
     const saveCurrentNote = async () => {
       const comment = textarea.value;
       if (!comment.trim()) return textarea.focus();
-      if (!target.dataset.clickNotesTargetId) target.dataset.clickNotesTargetId = `cn-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      if (!target.dataset.clickNotesTargetId)
+        target.dataset.clickNotesTargetId = `cn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const note = buildNotePayload(target, comment);
+      closeModal(); // ← close immediately, before any async work
       const count = await saveNote(note);
       await renderPinsForCurrentPage();
-      closeModal();
       showToast(`${count} notes saved`);
     };
 
@@ -319,17 +446,136 @@
   function onClick(event) {
     if (!captureEnabled || modalOpen) return;
     const target = event.target;
-    if (!(target instanceof HTMLElement) || target.closest("#click-notes-modal")) return;
+    if (!(target instanceof HTMLElement)) return;
+    if (target.closest("#click-notes-modal")) return;
+    // Let pin clicks through to their own handler
+    if (target.closest(".click-notes-pin-clickable")) return;
     event.preventDefault();
     event.stopPropagation();
     const resolvedTarget = getTargetElement(target);
     openNoteModal(resolvedTarget, event.clientX, event.clientY);
   }
 
+  async function openEditModal(noteIndex, x, y) {
+    if (!chrome?.runtime?.id) return;
+    if (modalOpen) return;
+    const { notes } = await chrome.storage.local.get({ notes: [] });
+    const note = notes[noteIndex];
+    if (!note) return;
+
+    modalOpen = true;
+    const modal = document.createElement("div");
+    modal.id = "click-notes-modal";
+    modal.style.left = "-9999px";
+    modal.style.top = "-9999px";
+
+    const summary = `${note.tagName || "?"}: ${getTextSnippet(note.text || note.selector || "", 42)}`;
+    modal.innerHTML = `
+      <div class="target-summary">${summary}</div>
+      <textarea id="click-notes-text" placeholder="Write a quick note...">${note.comment || ""}</textarea>
+      <div class="actions">
+        <button id="click-notes-delete" type="button">Delete</button>
+        <button id="click-notes-cancel" type="button">Cancel</button>
+        <button id="click-notes-save" type="button">Save</button>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    const { width: mw, height: mh } = modal.getBoundingClientRect();
+    const { left, top } = clampToViewport(x, y, mw, mh);
+    modal.style.left = `${left}px`;
+    modal.style.top = `${top}px`;
+
+    const textarea = modal.querySelector("#click-notes-text");
+    const cancelBtn = modal.querySelector("#click-notes-cancel");
+    const saveBtn = modal.querySelector("#click-notes-save");
+    const deleteBtn = modal.querySelector("#click-notes-delete");
+
+    textarea.focus();
+    textarea.select();
+
+    const repositionModal = () => {
+      const mr = modal.getBoundingClientRect();
+      const { left: l, top: t } = clampToViewport(
+        parseFloat(modal.style.left),
+        parseFloat(modal.style.top),
+        mr.width, mr.height,
+      );
+      modal.style.left = `${l}px`;
+      modal.style.top = `${t}px`;
+    };
+    window.addEventListener("resize", repositionModal);
+    window.addEventListener("scroll", repositionModal, { passive: true });
+
+    const closeModal = () => {
+      modalOpen = false;
+      window.removeEventListener("resize", repositionModal);
+      window.removeEventListener("scroll", repositionModal);
+      modal.remove();
+    };
+
+    const saveEdit = async () => {
+      const comment = textarea.value;
+      if (!comment.trim()) return textarea.focus();
+      closeModal();
+      if (!chrome?.runtime?.id) return;
+      const { notes: latest } = await chrome.storage.local.get({ notes: [] });
+      if (latest[noteIndex]) {
+        latest[noteIndex] = { ...latest[noteIndex], comment };
+        await chrome.storage.local.set({ notes: latest });
+      }
+      await renderPinsForCurrentPage();
+      showToast("Note updated");
+    };
+
+    const deleteNote = async () => {
+      closeModal();
+      if (!chrome?.runtime?.id) return;
+      const { notes: latest } = await chrome.storage.local.get({ notes: [] });
+      latest.splice(noteIndex, 1);
+      await chrome.storage.local.set({ notes: latest });
+      await renderPinsForCurrentPage();
+      showToast("Note deleted");
+    };
+
+    cancelBtn.addEventListener("click", closeModal);
+    saveBtn.addEventListener("click", saveEdit);
+    deleteBtn.addEventListener("click", deleteNote);
+    textarea.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") { event.preventDefault(); closeModal(); }
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); saveEdit(); }
+    });
+  }
+
   document.addEventListener("mousemove", onMouseMove, true);
   document.addEventListener("click", onClick, true);
-  document.addEventListener("scroll", scheduleOverlaySync, { passive: true, capture: true });
+  document.addEventListener("scroll", scheduleOverlaySync, {
+    passive: true,
+    capture: true,
+  });
   window.addEventListener("resize", scheduleOverlaySync);
+
+  // Stop capture when tab loses focus (user switches tabs)
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && captureEnabled) {
+      captureEnabled = false;
+      clearHighlight();
+      clearSelected();
+    }
+  });
+
+  // Escape key kills capture mode from the page itself
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Escape" && captureEnabled && !modalOpen) {
+        captureEnabled = false;
+        clearHighlight();
+        clearSelected();
+      }
+    },
+    true,
+  );
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "CLICK_NOTES_PING") {
@@ -339,26 +585,53 @@
     if (message.type === "CLICK_NOTES_START_CAPTURE") {
       captureEnabled = true;
       renderPinsForCurrentPage();
-      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      safeStorage(() =>
+        chrome.storage.local
+          .get({ notes: [] })
+          .then(({ notes }) =>
+            sendResponse({ captureEnabled, noteCount: notes.length }),
+          ),
+      );
       return true;
     }
     if (message.type === "CLICK_NOTES_STOP_CAPTURE") {
       captureEnabled = false;
-      if (!captureEnabled) {
-        clearHighlight();
-        clearSelected();
-      }
-      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      clearHighlight();
+      clearSelected();
+      document.querySelectorAll(".click-notes-highlight").forEach((el) => el.classList.remove("click-notes-highlight"));
+      safeStorage(() =>
+        chrome.storage.local
+          .get({ notes: [] })
+          .then(({ notes }) =>
+            sendResponse({ captureEnabled, noteCount: notes.length }),
+          ),
+      );
       return true;
     }
     if (message.type === "CLICK_NOTES_CLEAR_PINS") {
+      captureEnabled = false;
+      clearHighlight();
+      clearSelected();
+      document.querySelectorAll(".click-notes-highlight").forEach((el) => el.classList.remove("click-notes-highlight"));
       const layer = ensurePinLayer();
       layer.innerHTML = "";
       sendResponse({ cleared: true });
       return true;
     }
     if (message.type === "CLICK_NOTES_GET_STATE") {
-      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      safeStorage(() =>
+        chrome.storage.local
+          .get({ notes: [] })
+          .then(({ notes }) =>
+            sendResponse({ captureEnabled, noteCount: notes.length }),
+          ),
+      );
+      return true;
+    }
+    if (message.type === "CLICK_NOTES_EDIT_NOTE") {
+      const { noteIndex } = message;
+      openEditModal(noteIndex, window.innerWidth / 2 - 150, window.innerHeight / 2 - 130);
+      sendResponse({ ok: true });
       return true;
     }
     return false;
