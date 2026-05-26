@@ -7,6 +7,7 @@
   let selectedElement = null;
   let modalOpen = false;
   let pinLayer = null;
+  let overlaySyncRaf = null;
 
   function escapeCssValue(value) {
     if (!value) return "";
@@ -14,9 +15,13 @@
     return value.replace(/(["\\#.:\[\]\s>+~])/g, "\\$1");
   }
 
+  function isLikelyGeneratedClassName(className) {
+    return /^click-notes-/.test(className) || /^css-/.test(className) || /^r-/.test(className);
+  }
+
   function getStableClass(element) {
     const classes = Array.from(element.classList || []);
-    return classes.find((cls) => cls.length >= 3 && /^[a-zA-Z0-9_-]+$/.test(cls) && !/^\d/.test(cls)) || "";
+    return classes.find((cls) => cls.length >= 3 && /^[a-zA-Z0-9_-]+$/.test(cls) && !/^\d/.test(cls) && !isLikelyGeneratedClassName(cls)) || "";
   }
 
   function buildFallbackPath(element) {
@@ -82,22 +87,32 @@
   function ensurePinLayer() {
     if (pinLayer && document.body.contains(pinLayer)) return pinLayer;
     pinLayer = document.createElement("div");
-    pinLayer.id = "click-notes-pin-layer";
+    pinLayer.id = "click-notes-overlay-layer";
     document.body.appendChild(pinLayer);
     return pinLayer;
   }
 
-  function createPin(number, rect) {
-    if (!rect) return;
-    const layer = ensurePinLayer();
-    const pin = document.createElement("div");
-    pin.className = "click-notes-pin";
-    pin.textContent = String(number);
-    const docX = typeof rect.documentX === "number" ? rect.documentX : Math.round((rect.x || 0) + window.scrollX);
-    const docY = typeof rect.documentY === "number" ? rect.documentY : Math.round((rect.y || 0) + window.scrollY);
-    pin.style.left = `${Math.max(8, docX - 8)}px`;
-    pin.style.top = `${Math.max(8, docY - 10)}px`;
-    layer.appendChild(pin);
+  function resolveNoteRect(note) {
+    const targetId = note.targetId || "";
+    if (targetId) {
+      const target = document.querySelector(`[data-click-notes-target-id="${escapeCssValue(targetId)}"]`);
+      if (target instanceof HTMLElement) {
+        const rect = target.getBoundingClientRect();
+        return {
+          x: Math.round(rect.x + window.scrollX),
+          y: Math.round(rect.y + window.scrollY),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height)
+        };
+      }
+    }
+    if (!note.rect) return null;
+    return {
+      x: typeof note.rect.documentX === "number" ? note.rect.documentX : Math.round((note.rect.x || 0) + window.scrollX),
+      y: typeof note.rect.documentY === "number" ? note.rect.documentY : Math.round((note.rect.y || 0) + window.scrollY),
+      width: Math.round(note.rect.width || 0),
+      height: Math.round(note.rect.height || 0)
+    };
   }
 
   async function renderPinsForCurrentPage() {
@@ -108,9 +123,38 @@
     let pinNumber = 0;
     notes.forEach((note) => {
       if (getPageKey(note.url) !== pageKey) return;
-      if (!note.rect) return;
+      const rect = resolveNoteRect(note);
+      if (!rect) return;
       pinNumber += 1;
-      createPin(pinNumber, note.rect);
+
+      const overlay = document.createElement("div");
+      overlay.className = "click-notes-target-overlay";
+      overlay.style.left = `${rect.x}px`;
+      overlay.style.top = `${rect.y}px`;
+      overlay.style.width = `${Math.max(8, rect.width)}px`;
+      overlay.style.height = `${Math.max(8, rect.height)}px`;
+
+      const badge = document.createElement("div");
+      badge.className = "click-notes-target-badge";
+      badge.textContent = String(pinNumber);
+      overlay.appendChild(badge);
+
+      const pin = document.createElement("div");
+      pin.className = "click-notes-pin";
+      pin.textContent = String(pinNumber);
+      pin.style.left = `${Math.max(8, rect.x - 10)}px`;
+      pin.style.top = `${Math.max(8, rect.y - 10)}px`;
+
+      layer.appendChild(overlay);
+      layer.appendChild(pin);
+    });
+  }
+
+  function scheduleOverlaySync() {
+    if (overlaySyncRaf) return;
+    overlaySyncRaf = requestAnimationFrame(() => {
+      overlaySyncRaf = null;
+      renderPinsForCurrentPage();
     });
   }
 
@@ -120,7 +164,6 @@
   }
 
   function clearSelected() {
-    if (selectedElement) selectedElement.classList.remove("click-notes-selected");
     selectedElement = null;
   }
 
@@ -181,7 +224,7 @@
       href: element.getAttribute("href") || "",
       src: element.getAttribute("src") || "",
       id: element.id || "",
-      classList: Array.from(element.classList || []),
+      classList: Array.from(element.classList || []).filter((cls) => !isLikelyGeneratedClassName(cls)),
       selector: getElementSelector(element),
       fallbackPath: buildFallbackPath(element),
       rect: {
@@ -202,7 +245,8 @@
         borderRadius: style.borderRadius,
         boxShadow: style.boxShadow
       },
-      comment
+      comment,
+      targetId: element.dataset.clickNotesTargetId || ""
     };
   }
 
@@ -218,7 +262,6 @@
     clearHighlight();
     clearSelected();
     selectedElement = target;
-    selectedElement.classList.add("click-notes-selected");
 
     const modal = document.createElement("div");
     modal.id = "click-notes-modal";
@@ -251,6 +294,7 @@
     const saveCurrentNote = async () => {
       const comment = textarea.value;
       if (!comment.trim()) return textarea.focus();
+      if (!target.dataset.clickNotesTargetId) target.dataset.clickNotesTargetId = `cn-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
       const note = buildNotePayload(target, comment);
       const count = await saveNote(note);
       await renderPinsForCurrentPage();
@@ -284,6 +328,8 @@
 
   document.addEventListener("mousemove", onMouseMove, true);
   document.addEventListener("click", onClick, true);
+  window.addEventListener("scroll", scheduleOverlaySync, { passive: true });
+  window.addEventListener("resize", scheduleOverlaySync);
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "CLICK_NOTES_PING") {

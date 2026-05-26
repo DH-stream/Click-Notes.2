@@ -15,6 +15,10 @@
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     .stack { display: grid; gap: 8px; }
+    #notesList { display: grid; gap: 6px; margin-top: 4px; }
+    .note-row { display: grid; grid-template-columns: 18px 1fr; gap: 6px; font-size: 12px; color: #cbd5e1; }
+    .note-row .num { color: #f8fafc; font-weight: 700; }
+    .note-row .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     button {
       border: 1px solid #1f2937;
       background: #111827;
@@ -37,6 +41,7 @@
     <button id="stopBtn">Stop</button>
     <button id="copyBtn">Copy</button>
     <button id="clearBtn">Clear</button>
+    <div id="notesList"></div>
   </div>
   <script src="popup.js"></script>
 </body>
