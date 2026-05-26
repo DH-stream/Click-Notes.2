@@ -5,106 +5,207 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Click Notes</title>
   <style>
-    :root { color-scheme: dark; }
+    @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600&display=swap');
+
+    :root {
+      color-scheme: dark;
+      --bg-base: #0f0f0f;
+      --bg-surface: #141414;
+      --bg-raised: #1a1a1a;
+      --bg-hover: #1f1f1f;
+      --border: rgba(255,255,255,0.07);
+      --border-mid: rgba(255,255,255,0.11);
+      --border-strong: rgba(255,255,255,0.16);
+      --text-primary: #f2f2f2;
+      --text-secondary: #8a8a8a;
+      --text-muted: #555;
+      --accent: #e8e8e8;
+      --accent-stop: rgba(220, 50, 50, 0.18);
+      --accent-stop-text: #f87171;
+      --radius: 4px;
+      --radius-sm: 2px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      margin: 0;
-      width: 260px;
-      padding: 10px;
-      background:
-        radial-gradient(circle at top left, rgba(255,255,255,0.08), transparent 35%),
-        linear-gradient(180deg, #0d131b 0%, #090e14 100%);
-      color: #e5e7eb;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .stack {
-      display: grid;
-      gap: 8px;
-      padding: 6px;
-      border-radius: 14px;
-      background: rgba(11, 17, 25, 0.84);
-      border: 1px solid rgba(148, 163, 184, 0.12);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 8px 24px rgba(0, 0, 0, 0.28);
-    }
-    button {
-      appearance: none;
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      background: linear-gradient(180deg, #18212c, #111823);
-      color: #f8fafc;
-      border-radius: 11px;
-      padding: 10px 12px;
+      width: 268px;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
       font-size: 13px;
-      font-weight: 650;
-      letter-spacing: 0.01em;
-      cursor: pointer;
-      transition: background 120ms ease, border-color 120ms ease, transform 80ms ease;
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.25);
+      line-height: 1.4;
+      padding: 1px;
     }
-    button:hover {
-      background: linear-gradient(180deg, #1f2a37, #15202c);
-      border-color: rgba(148, 163, 184, 0.32);
+
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
     }
-    button:active { transform: translateY(1px); }
-    #recordBtn {
-      background: linear-gradient(180deg, #f4f4f5, #d9dde3);
-      color: #080c11;
-      border-color: rgba(255,255,255,0.72);
-    }
-    #recordBtn:hover { background: linear-gradient(180deg, #ffffff, #e9edf2); }
-    #stopBtn {
-      display: none;
-      background: linear-gradient(180deg, #2a171a, #171012);
-      color: #fecaca;
-      border-color: rgba(248, 113, 113, 0.22);
-    }
-    #copyBtn {
-      background: linear-gradient(180deg, #1a2736, #121c28);
-      border-color: rgba(125, 150, 183, 0.25);
-    }
-    #clearBtn {
-      color: #cbd5e1;
-      background: linear-gradient(180deg, #121a25, #0f161f);
-      border-color: rgba(148, 163, 184, 0.14);
-    }
-    #notesList {
-      display: grid;
-      gap: 6px;
-      margin-top: 2px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .note-row {
-      display: grid;
-      grid-template-columns: 22px 1fr;
+
+    /* ── Header strip ── */
+    .header {
+      display: flex;
       align-items: center;
       gap: 7px;
-      min-height: 22px;
-      font-size: 12px;
-      color: #aeb8c7;
+      padding: 10px 12px 9px;
+      border-bottom: 1px solid var(--border);
     }
-    .note-row .num {
-      width: 18px;
-      height: 18px;
-      border-radius: 999px;
-      display: grid;
-      place-items: center;
-      background: rgba(255,255,255,0.08);
-      color: #f8fafc;
+
+    .logo-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background 200ms;
+    }
+    .logo-dot.recording {
+      background: #ef4444;
+      box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+      animation: pulse-dot 1.6s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .header-label {
+      font-family: 'Geist Mono', monospace;
       font-size: 11px;
-      font-weight: 750;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-secondary);
     }
-    .note-row .text {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+
+    /* ── Controls ── */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .controls button {
+      appearance: none;
+      border: none;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      font-family: 'Geist', sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+      padding: 9px 10px;
+      cursor: pointer;
+      transition: background 100ms, color 100ms;
+      text-align: center;
+    }
+
+    .controls button:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    .controls button:active {
+      background: #222;
+    }
+
+    /* Record button: prominent */
+    #recordBtn {
+      color: var(--text-primary) !important;
+      background: var(--bg-raised) !important;
+      font-weight: 600 !important;
+    }
+    #recordBtn:hover {
+      background: #202020 !important;
+    }
+
+    /* Stop button */
+    #stopBtn {
+      display: none;
+      color: var(--accent-stop-text) !important;
+      background: var(--bg-raised) !important;
+      font-weight: 600 !important;
+    }
+    #stopBtn:hover {
+      background: rgba(220, 50, 50, 0.12) !important;
+    }
+
+    /* Copy button */
+    #copyBtn {
+      color: var(--text-primary) !important;
+    }
+
+    /* ── Notes area ── */
+    #notesList {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #notesList:empty::after {
+      content: 'No notes yet';
+      display: block;
+      padding: 16px 12px;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: 'Geist Mono', monospace;
+    }
+
+    .note-row {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      align-items: start;
+      gap: 0;
+      padding: 9px 12px 9px 0;
+      border-bottom: 1px solid var(--border);
+      min-height: 36px;
+    }
+
+    .note-row:last-child {
+      border-bottom: none;
+    }
+
+    .num {
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding-top: 1px;
+      font-family: 'Geist Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.04em;
+      flex-shrink: 0;
+    }
+
+    .text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      word-break: break-word;
+      white-space: pre-wrap;
     }
   </style>
 </head>
 <body>
-  <div class="stack">
-    <button id="recordBtn">Record</button>
-    <button id="stopBtn">Stop</button>
-    <button id="copyBtn">Copy</button>
-    <button id="clearBtn">Clear</button>
+  <div class="panel">
+    <div class="header">
+      <div class="logo-dot" id="statusDot"></div>
+      <span class="header-label" id="headerLabel">Click Notes</span>
+    </div>
+
+    <div class="controls">
+      <button id="recordBtn">Record</button>
+      <button id="stopBtn">Stop</button>
+      <button id="copyBtn">Copy</button>
+      <button id="clearBtn">Clear</button>
+    </div>
+
     <div id="notesList"></div>
   </div>
   <script src="popup.js"></script>

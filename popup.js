@@ -3,10 +3,14 @@ const stopBtn = document.getElementById("stopBtn");
 const copyBtn = document.getElementById("copyBtn");
 const clearBtn = document.getElementById("clearBtn");
 const notesList = document.getElementById("notesList");
+const statusDot = document.getElementById("statusDot");
+const headerLabel = document.getElementById("headerLabel");
 
 function setRecordingUI(isRecording) {
   recordBtn.style.display = isRecording ? "none" : "block";
   stopBtn.style.display = isRecording ? "block" : "none";
+  if (statusDot) statusDot.classList.toggle("recording", isRecording);
+  if (headerLabel) headerLabel.textContent = isRecording ? "Recording…" : "Click Notes";
 }
 
 function setCopyLabel(noteCount) {
@@ -56,7 +60,8 @@ function renderNotePreviews(notes) {
   notes.forEach((note, idx) => {
     const row = document.createElement("div");
     row.className = "note-row";
-    const text = (note.comment || "").replace(/\s+/g, " ").trim().slice(0, 48);
+    // Show full comment text, no truncation
+    const text = (note.comment || "").trim();
     row.innerHTML = `<span class="num">${idx + 1}</span><span class="text">${text}</span>`;
     notesList.appendChild(row);
   });
