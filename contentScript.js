@@ -11,17 +11,30 @@
 
   function escapeCssValue(value) {
     if (!value) return "";
-    if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(value);
+    if (typeof CSS !== "undefined" && typeof CSS.escape === "function")
+      return CSS.escape(value);
     return value.replace(/(["\\#.:\[\]\s>+~])/g, "\\$1");
   }
 
   function isLikelyGeneratedClassName(className) {
-    return /^click-notes-/.test(className) || /^css-/.test(className) || /^r-/.test(className);
+    return (
+      /^click-notes-/.test(className) ||
+      /^css-/.test(className) ||
+      /^r-/.test(className)
+    );
   }
 
   function getStableClass(element) {
     const classes = Array.from(element.classList || []);
-    return classes.find((cls) => cls.length >= 3 && /^[a-zA-Z0-9_-]+$/.test(cls) && !/^\d/.test(cls) && !isLikelyGeneratedClassName(cls)) || "";
+    return (
+      classes.find(
+        (cls) =>
+          cls.length >= 3 &&
+          /^[a-zA-Z0-9_-]+$/.test(cls) &&
+          !/^\d/.test(cls) &&
+          !isLikelyGeneratedClassName(cls),
+      ) || ""
+    );
   }
 
   function buildFallbackPath(element) {
@@ -39,7 +52,9 @@
         segments.unshift(tag);
         break;
       }
-      const sameTag = Array.from(parent.children).filter((n) => n.tagName === current.tagName);
+      const sameTag = Array.from(parent.children).filter(
+        (n) => n.tagName === current.tagName,
+      );
       const index = Math.max(1, sameTag.indexOf(current) + 1);
       segments.unshift(`${tag}:nth-of-type(${index})`);
       current = parent;
@@ -56,12 +71,15 @@
     }
     if (element.id) return `#${escapeCssValue(element.id)}`;
     const stableClass = getStableClass(element);
-    if (stableClass) return `${element.tagName.toLowerCase()}.${escapeCssValue(stableClass)}`;
+    if (stableClass)
+      return `${element.tagName.toLowerCase()}.${escapeCssValue(stableClass)}`;
     return buildFallbackPath(element) || element.tagName.toLowerCase();
   }
 
   function getTargetElement(element) {
-    const clickable = element.closest('button, a, [role="button"], input, label, textarea, select');
+    const clickable = element.closest(
+      'button, a, [role="button"], input, label, textarea, select',
+    );
     return clickable || element;
   }
 
@@ -74,7 +92,6 @@
     const section = element.closest(selector);
     return getTextSnippet(section?.innerText || parent?.innerText || "", 220);
   }
-
 
   function getPageKey(url) {
     try {
@@ -95,23 +112,31 @@
   function resolveNoteRect(note) {
     const targetId = note.targetId || "";
     if (targetId) {
-      const target = document.querySelector(`[data-click-notes-target-id="${escapeCssValue(targetId)}"]`);
+      const target = document.querySelector(
+        `[data-click-notes-target-id="${escapeCssValue(targetId)}"]`,
+      );
       if (target instanceof HTMLElement) {
         const rect = target.getBoundingClientRect();
         return {
           x: Math.round(rect.x + window.scrollX),
           y: Math.round(rect.y + window.scrollY),
           width: Math.round(rect.width),
-          height: Math.round(rect.height)
+          height: Math.round(rect.height),
         };
       }
     }
     if (!note.rect) return null;
     return {
-      x: typeof note.rect.documentX === "number" ? note.rect.documentX : Math.round((note.rect.x || 0) + window.scrollX),
-      y: typeof note.rect.documentY === "number" ? note.rect.documentY : Math.round((note.rect.y || 0) + window.scrollY),
+      x:
+        typeof note.rect.documentX === "number"
+          ? note.rect.documentX
+          : Math.round((note.rect.x || 0) + window.scrollX),
+      y:
+        typeof note.rect.documentY === "number"
+          ? note.rect.documentY
+          : Math.round((note.rect.y || 0) + window.scrollY),
       width: Math.round(note.rect.width || 0),
-      height: Math.round(note.rect.height || 0)
+      height: Math.round(note.rect.height || 0),
     };
   }
 
@@ -159,7 +184,8 @@
   }
 
   function clearHighlight() {
-    if (hoveredElement) hoveredElement.classList.remove("click-notes-highlight");
+    if (hoveredElement)
+      hoveredElement.classList.remove("click-notes-highlight");
     hoveredElement = null;
   }
 
@@ -184,7 +210,11 @@
   function onMouseMove(event) {
     if (!captureEnabled || modalOpen) return;
     const target = event.target;
-    if (!(target instanceof HTMLElement) || target.closest("#click-notes-modal")) return;
+    if (
+      !(target instanceof HTMLElement) ||
+      target.closest("#click-notes-modal")
+    )
+      return;
     const resolvedTarget = getTargetElement(target);
     if (hoveredElement !== resolvedTarget) {
       clearHighlight();
@@ -199,8 +229,10 @@
     const height = 220;
     let left = x + 10;
     let top = y + 10;
-    if (left + width > window.innerWidth - margin) left = window.innerWidth - width - margin;
-    if (top + height > window.innerHeight - margin) top = window.innerHeight - height - margin;
+    if (left + width > window.innerWidth - margin)
+      left = window.innerWidth - width - margin;
+    if (top + height > window.innerHeight - margin)
+      top = window.innerHeight - height - margin;
     return { left: Math.max(margin, left), top: Math.max(margin, top) };
   }
 
@@ -224,7 +256,9 @@
       href: element.getAttribute("href") || "",
       src: element.getAttribute("src") || "",
       id: element.id || "",
-      classList: Array.from(element.classList || []).filter((cls) => !isLikelyGeneratedClassName(cls)),
+      classList: Array.from(element.classList || []).filter(
+        (cls) => !isLikelyGeneratedClassName(cls),
+      ),
       selector: getElementSelector(element),
       fallbackPath: buildFallbackPath(element),
       rect: {
@@ -233,20 +267,26 @@
         width: Math.round(rect.width),
         height: Math.round(rect.height),
         documentX: Math.round(rect.x + window.scrollX),
-        documentY: Math.round(rect.y + window.scrollY)
+        documentY: Math.round(rect.y + window.scrollY),
       },
-      parentText: getContextText(element, "section, article, main, form, nav, aside"),
-      sectionText: getContextText(element, "section, article, form, [role='region'], [data-testid]"),
+      parentText: getContextText(
+        element,
+        "section, article, main, form, nav, aside",
+      ),
+      sectionText: getContextText(
+        element,
+        "section, article, form, [role='region'], [data-testid]",
+      ),
       visual: {
         color: style.color,
         backgroundColor: style.backgroundColor,
         fontSize: style.fontSize,
         fontWeight: style.fontWeight,
         borderRadius: style.borderRadius,
-        boxShadow: style.boxShadow
+        boxShadow: style.boxShadow,
       },
       comment,
-      targetId: element.dataset.clickNotesTargetId || ""
+      targetId: element.dataset.clickNotesTargetId || "",
     };
   }
 
@@ -294,11 +334,12 @@
     const saveCurrentNote = async () => {
       const comment = textarea.value;
       if (!comment.trim()) return textarea.focus();
-      if (!target.dataset.clickNotesTargetId) target.dataset.clickNotesTargetId = `cn-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+      if (!target.dataset.clickNotesTargetId)
+        target.dataset.clickNotesTargetId = `cn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const note = buildNotePayload(target, comment);
+      closeModal(); // ← close immediately, before any async work
       const count = await saveNote(note);
       await renderPinsForCurrentPage();
-      closeModal();
       showToast(`${count} notes saved`);
     };
 
@@ -319,7 +360,11 @@
   function onClick(event) {
     if (!captureEnabled || modalOpen) return;
     const target = event.target;
-    if (!(target instanceof HTMLElement) || target.closest("#click-notes-modal")) return;
+    if (
+      !(target instanceof HTMLElement) ||
+      target.closest("#click-notes-modal")
+    )
+      return;
     event.preventDefault();
     event.stopPropagation();
     const resolvedTarget = getTargetElement(target);
@@ -328,8 +373,33 @@
 
   document.addEventListener("mousemove", onMouseMove, true);
   document.addEventListener("click", onClick, true);
-  document.addEventListener("scroll", scheduleOverlaySync, { passive: true, capture: true });
+  document.addEventListener("scroll", scheduleOverlaySync, {
+    passive: true,
+    capture: true,
+  });
   window.addEventListener("resize", scheduleOverlaySync);
+
+  // Stop capture when tab loses focus (user switches tabs)
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden && captureEnabled) {
+      captureEnabled = false;
+      clearHighlight();
+      clearSelected();
+    }
+  });
+
+  // Escape key kills capture mode from the page itself
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (event.key === "Escape" && captureEnabled && !modalOpen) {
+        captureEnabled = false;
+        clearHighlight();
+        clearSelected();
+      }
+    },
+    true,
+  );
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "CLICK_NOTES_PING") {
@@ -339,7 +409,11 @@
     if (message.type === "CLICK_NOTES_START_CAPTURE") {
       captureEnabled = true;
       renderPinsForCurrentPage();
-      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      chrome.storage.local
+        .get({ notes: [] })
+        .then(({ notes }) =>
+          sendResponse({ captureEnabled, noteCount: notes.length }),
+        );
       return true;
     }
     if (message.type === "CLICK_NOTES_STOP_CAPTURE") {
@@ -348,7 +422,11 @@
         clearHighlight();
         clearSelected();
       }
-      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      chrome.storage.local
+        .get({ notes: [] })
+        .then(({ notes }) =>
+          sendResponse({ captureEnabled, noteCount: notes.length }),
+        );
       return true;
     }
     if (message.type === "CLICK_NOTES_CLEAR_PINS") {
@@ -358,7 +436,11 @@
       return true;
     }
     if (message.type === "CLICK_NOTES_GET_STATE") {
-      chrome.storage.local.get({ notes: [] }).then(({ notes }) => sendResponse({ captureEnabled, noteCount: notes.length }));
+      chrome.storage.local
+        .get({ notes: [] })
+        .then(({ notes }) =>
+          sendResponse({ captureEnabled, noteCount: notes.length }),
+        );
       return true;
     }
     return false;
