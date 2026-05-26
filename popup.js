@@ -2,6 +2,7 @@ const recordBtn = document.getElementById("recordBtn");
 const stopBtn = document.getElementById("stopBtn");
 const copyBtn = document.getElementById("copyBtn");
 const clearBtn = document.getElementById("clearBtn");
+const notesList = document.getElementById("notesList");
 
 function setRecordingUI(isRecording) {
   recordBtn.style.display = isRecording ? "none" : "block";
@@ -41,12 +42,33 @@ async function sendToActiveTab(type) {
 }
 
 function quoted(value) { return value ? `"${value}"` : "n/a"; }
+
+function isLowValueClass(className) {
+  return /^click-notes-/.test(className) || /^css-/.test(className) || /^r-/.test(className);
+}
+
+function cleanClassList(classList = []) {
+  return classList.filter((cls) => !isLowValueClass(cls));
+}
+
+function renderNotePreviews(notes) {
+  notesList.innerHTML = "";
+  notes.forEach((note, idx) => {
+    const row = document.createElement("div");
+    row.className = "note-row";
+    const text = (note.comment || "").replace(/\s+/g, " ").trim().slice(0, 48);
+    row.innerHTML = `<span class="num">${idx + 1}</span><span class="text">${text}</span>`;
+    notesList.appendChild(row);
+  });
+}
+
 function formatImplementationClues(note) {
   const clues = [];
   if (note.text) clues.push(`- Search repo for visible text: ${quoted(note.text)}`);
   if (note.ariaLabel) clues.push(`- Search repo for aria-label: ${quoted(note.ariaLabel)}`);
   if (note.id) clues.push(`- Search repo for id: ${quoted(note.id)}`);
-  if (Array.isArray(note.classList) && note.classList.length) clues.push(`- Search repo for class names: ${note.classList.slice(0, 4).join(", ")}`);
+  const meaningfulClasses = cleanClassList(note.classList || []);
+  if (meaningfulClasses.length) clues.push(`- Search repo for class names: ${meaningfulClasses.slice(0, 4).join(", ")}`);
   if (note.selector) clues.push(`- Search repo for selector: ${quoted(note.selector)}`);
   if (note.pathname) clues.push(`- Search route/page: ${note.pathname}`);
   return clues.length ? clues : ["- No strong implementation clues found"];
@@ -69,7 +91,7 @@ function formatNoteBlock(note, index) {
     `- Href: ${note.href || "n/a"}`,
     `- Src: ${note.src || "n/a"}`,
     `- Id: ${note.id || "n/a"}`,
-    `- Class list: ${(note.classList || []).join(" ") || "n/a"}`,
+    `- Class list: ${cleanClassList(note.classList || []).join(" ") || "n/a"}`,
     `- Position: x=${note.rect?.x ?? "?"} y=${note.rect?.y ?? "?"} w=${note.rect?.width ?? "?"} h=${note.rect?.height ?? "?"}`,
     "", "Nearby context:",
     `- Parent text: ${note.parentText || "n/a"}`,
@@ -106,6 +128,7 @@ async function flashButton(button, text, restoreText) {
 async function refresh() {
   const { notes } = await chrome.storage.local.get({ notes: [] });
   setCopyLabel(notes.length);
+  renderNotePreviews(notes);
   try {
     const state = await sendToActiveTab("CLICK_NOTES_GET_STATE");
     setRecordingUI(Boolean(state?.captureEnabled));
