@@ -1,129 +1,135 @@
 # Click Notes
 
-Click Notes is a lightweight browser extension for collecting visual UI feedback directly on local and hosted web projects.
+A lightweight browser extension for collecting visual UI feedback directly on your own web projects, then copying all notes as clean, structured Markdown ready for ChatGPT, Claude, Codex, or a GitHub issue.
 
-The workflow is intentionally simple:
-
-```txt
-Click an element → write a note → save → repeat → copy all notes
+```
+Record → click element → write note → save → repeat → copy
 ```
 
-The tool is designed for personal development workflows where visual feedback needs to become clear, structured build notes for ChatGPT, Codex, GitHub issues, pull requests, or project documentation.
+---
 
-## Why this exists
+## What it does
 
-When reviewing UI work, it is often hard to describe exactly which element needs attention.
+When reviewing UI work it is hard to describe exactly which element needs attention. Instead of writing vague feedback like *"the thing at the top feels off"*, Click Notes lets you point directly at an element in the browser, write your comment in plain language, and export everything as a structured developer handoff.
 
-Instead of writing vague feedback like “the thing at the top feels wrong”, Click Notes lets the reviewer point directly at an element in the browser, write their own comment, and export all notes as a structured handoff.
+Your words are the source of truth. Element metadata is only there to help locate and implement the change.
 
-The user-written comment is the source of truth. Element metadata is only included to make the comment easier to locate and implement.
+---
 
-## Intended use
+## Install
 
-Click Notes is primarily intended for the owner’s own projects, including:
+Click Notes runs as an unpacked extension — no build step, no backend, no account required.
 
-- Localhost development builds
-- Vercel preview deployments
-- Vercel production deployments
-- Design-heavy web apps
-- Personal developer tooling
+**Requirements:** Chrome, Edge, or any Chromium-based browser with Developer mode enabled.
 
-It is not intended to be a public analytics tool, tracking tool, or general-purpose feedback widget for external users.
+1. Clone the repo:
 
-## MVP scope
+```bash
+git clone https://github.com/DH-stream/click-notes.git
+```
 
-The first version should focus on a fast, reliable capture flow:
+2. Open `chrome://extensions` (or `edge://extensions`)
+3. Enable **Developer mode**
+4. Click **Load unpacked** and select the `click-notes` folder
+5. Pin the extension to your toolbar for quick access
 
-- Start capture mode from the browser extension popup
-- Highlight hovered page elements
-- Click an element to open a comment box
-- Let the user write their own note
-- Save multiple notes during the same review session
-- Show a count of saved notes
-- Optionally show numbered pins on the page
-- Copy all notes as Markdown
-- Clear notes when finished
+For full install instructions see [INSTALL.md](INSTALL.md).
 
-## Export should include
+---
 
-Each exported note should include useful context such as:
+## Usage
 
-- Page URL
-- Page title
-- Viewport size
-- Element tag
-- Best available selector
-- Element text, when available
-- Element position and size
-- Optional data attributes such as `data-note`, `data-component`, or `data-testid`
-- The user-written comment
+1. Open a page you want to review (localhost, Vercel preview, etc.)
+2. Click the Click Notes icon in your toolbar
+3. Click **Record**
+4. Hover over elements — they highlight as you move
+5. Click an element to open the note box
+6. Write your comment and click **Save note**
+7. Repeat for other elements
+8. Click **Copy** to copy all notes as Markdown
+9. Paste into ChatGPT, Claude, Codex, or a GitHub issue
 
-The exported output should be readable by both humans and AI coding tools.
+Numbered pins appear on the page for each saved note. Click any pin to edit or delete it.
 
-## Preferred export style
+**Keyboard shortcuts in the note box:**
+- `Cmd/Ctrl + Enter` — save note
+- `Escape` — cancel
 
-The copied output should be Markdown-first.
+---
 
-Example:
+## Exported output
+
+Each note includes the element's tag, selector, text, position, visual styles, and nearby context — everything an AI coding assistant or developer needs to locate and implement the change.
 
 ```md
 # Visual build notes
 
-Page: http://localhost:3000/dashboard
+Generated: 2026-05-25T20:30:00.000Z
+
+## Page: http://localhost:3000/dashboard
+
+Title: My App
 Viewport: 1440x900
 
-## Note 1
+### Note 1
 
-Element:
+Target:
 - Tag: button
+- Selector: [data-testid="save-btn"]
 - Text: Save
-- Selector: button.primary-action
 - Position: x=1024 y=720 w=120 h=44
 
 Comment:
-This button should feel more prominent and easier to notice.
+This button should feel more prominent. It gets lost next to the cancel action.
 ```
 
-## Development approach
+---
 
-The first implementation should stay boring and simple.
+## Tips for better selectors
 
-Prefer:
+Click Notes prefers stable identifiers when available. Adding a `data-note` attribute to key elements gives you a reliable, human-readable selector in the export:
 
-- Manifest V3 browser extension
-- Plain HTML, CSS, and JavaScript for the MVP
-- No backend
-- No database
-- No login
-- No AI processing
-- Local browser storage only
-- Manual copy-to-clipboard export
+```html
+<button data-note="save-button">Save</button>
+```
 
-Avoid overengineering the first version. The goal is to quickly create a working personal tool that can be tested on real projects.
+Supported attributes in priority order: `data-note`, `data-component`, `data-testid`, `data-cy`, `id`, stable class names.
 
-## Supported targets
+If none are present the extension falls back to a structural path and shows a hint in the note box.
 
-Initial browser permissions should be limited to development and personal deployment URLs, such as:
+---
 
-- `http://localhost/*`
-- `http://127.0.0.1/*`
-- `https://*.vercel.app/*`
+## File structure
 
-Additional project domains can be added later if needed.
+```
+click-notes/
+  manifest.json       Extension config
+  popup.html          Toolbar popup UI
+  popup.js            Popup logic and Markdown export
+  contentScript.js    Page capture, modal, pins
+  contentStyle.css    Highlight, modal, pin styles
+  icons/              Extension icons (16, 48, 128px)
+```
 
-## Future ideas
+---
 
-Possible future improvements:
+## Privacy
 
-- Screenshot thumbnail per note
-- JSON export in addition to Markdown
-- Copy as ChatGPT prompt
-- Copy as Codex prompt
-- Export as GitHub issue body
-- Group notes by URL
-- Edit/delete saved notes before copying
-- Session history
-- Better selector generation
-- React component hints via `data-component`
-- Support project-specific metadata
-- Optional local endpoint integration for custom tooling
+Click Notes is user-initiated. It does not run passively or track browsing. Notes are stored locally in browser extension storage and never sent anywhere. Capture only starts when you click **Record**.
+
+---
+
+## Roadmap
+
+- [ ] Screenshot thumbnail per note
+- [ ] JSON export
+- [ ] Copy as ChatGPT / Claude prompt
+- [ ] Export as GitHub issue body
+- [ ] Edit notes in the popup before copying
+- [ ] Session history
+
+---
+
+## License
+
+MIT
