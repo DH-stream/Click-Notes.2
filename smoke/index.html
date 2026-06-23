@@ -49,7 +49,7 @@
       align-items: center;
     }
 
-    .field, .form-row {
+    .field, .form-row, .plain-row {
       display: grid;
       gap: 7px;
       margin: 12px 0;
@@ -116,6 +116,10 @@
       <div class="field">
         <label for="notes">Notes</label>
         <textarea id="notes" name="notes" placeholder="Helpful context"></textarea>
+      </div>
+      <div class="plain-row" data-guide-id="plain-control-row">
+        <span>Plain text near a control</span>
+        <input name="accountCode" placeholder="ACME-001" />
       </div>
     </section>
 

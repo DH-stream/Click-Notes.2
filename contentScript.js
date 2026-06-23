@@ -163,7 +163,28 @@
       if (nestedControl instanceof HTMLElement) return nestedControl;
       return wrapper;
     }
+    const nearbyControl = findNearbyFormControl(element);
+    if (nearbyControl) return nearbyControl;
     return element;
+  }
+
+  function findNearbyFormControl(element) {
+    const tagName = element.tagName?.toLowerCase();
+    if (!["span", "p", "div", "strong", "em", "small"].includes(tagName)) return null;
+    let container = element.parentElement;
+    let depth = 0;
+    while (container && depth < 2 && !["body", "html"].includes(container.tagName.toLowerCase())) {
+      const rect = container.getBoundingClientRect();
+      const controls = Array.from(
+        container.querySelectorAll("input:not([type='hidden']), textarea, select"),
+      ).filter((item) => item instanceof HTMLElement);
+      if (controls.length === 1 && container.children.length <= 8 && rect.height <= 260) {
+        return controls[0];
+      }
+      container = container.parentElement;
+      depth += 1;
+    }
+    return null;
   }
 
   function resolveLabelControl(element) {
