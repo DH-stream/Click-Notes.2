@@ -79,6 +79,11 @@ function updateGuide(guide) {
   state.guides = state.guides.map((item) => (item.id === guide.id ? guide : item));
 }
 
+function safeGuideUrl(value) {
+  const normalized = normalizeGuideUrl(value || "");
+  return normalized || "";
+}
+
 function button(label, onClick, className = "") {
   return el("button", { type: "button", className, textContent: label, onClick });
 }
@@ -231,7 +236,11 @@ function renderStepEditor() {
     weakHint,
     field("Title", title),
     field("Body / instruction", body),
-    checkbox("showPopup", "Show instruction text", step.playback?.showPopup !== false),
+    checkbox(
+      "showPopup",
+      "Show instruction text",
+      (step.playback?.showInstructionText ?? step.playback?.showPopup) !== false,
+    ),
     checkbox("highlightTarget", "Highlight target", step.playback?.highlightTarget !== false),
     checkbox("autoScroll", "Scroll automatically to element", step.playback?.autoScroll !== false),
     checkbox("dimPage", "Dim rest of page", step.playback?.dimPage !== false),
@@ -282,8 +291,10 @@ async function playGuide(guideId) {
   let tab = await getActiveTab();
   if (!tab?.id) return;
   const firstPageUrl = guide.steps?.[0]?.pageUrl || guide.startUrl;
-  if (normalizeGuideUrl(tab.url || "") !== normalizeGuideUrl(firstPageUrl)) {
-    await chrome.tabs.update(tab.id, { url: firstPageUrl });
+  const safeFirstPageUrl = safeGuideUrl(firstPageUrl);
+  if (!safeFirstPageUrl) return setStatus("Guide has no safe start URL");
+  if (normalizeGuideUrl(tab.url || "") !== safeFirstPageUrl) {
+    await chrome.tabs.update(tab.id, { url: safeFirstPageUrl });
     await waitForTabComplete(tab.id);
     tab = await getActiveTab();
   }
@@ -336,8 +347,8 @@ async function handleImport(file) {
     setStatus("Guide imported");
     render();
     await playGuide(imported.id);
-  } catch {
-    setStatus("Import failed");
+  } catch (error) {
+    setStatus(error?.message || "Import failed");
   } finally {
     importFile.value = "";
   }
@@ -373,6 +384,7 @@ async function saveStepFromForm(step) {
     title: document.getElementById("stepTitle").value.trim() || "Untitled step",
     body: document.getElementById("stepBody").value.trim(),
     playback: {
+      showInstructionText: document.getElementById("showPopup").checked,
       showPopup: document.getElementById("showPopup").checked,
       highlightTarget: document.getElementById("highlightTarget").checked,
       dimPage: document.getElementById("dimPage").checked,

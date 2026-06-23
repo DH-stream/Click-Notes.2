@@ -87,6 +87,17 @@
   white-space: pre-wrap;
 }
 
+.click-guide-warning {
+  margin-top: 10px;
+  padding: 7px 8px;
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  border-radius: 6px;
+  background: rgba(250, 204, 21, 0.08);
+  color: #ded6a7;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 #click-guide-popup.click-guide-compact {
   width: auto;
   min-width: 224px;

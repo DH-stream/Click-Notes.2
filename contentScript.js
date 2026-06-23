@@ -8,11 +8,13 @@
     ((value) => {
       try {
         const url = new URL(value);
-        return `${url.origin}${url.pathname}`;
-      } catch {
-        return String(value || "").split("#")[0].split("?")[0];
-      }
-    });
+        if (!["http:", "https:", "file:"].includes(url.protocol)) return "";
+      if (url.protocol === "file:") return `file://${url.pathname}`;
+      return `${url.origin}${url.pathname}`;
+    } catch {
+      return "";
+    }
+  });
 
   let mode = "idle";
   let hoveredElement = null;
@@ -144,10 +146,34 @@
   }
 
   function getTargetElement(element) {
+    if (!element) return null;
+    const control = resolveLabelControl(element);
+    if (control) return control;
     const clickable = element.closest(
-      'button, a, [role="button"], input, label, textarea, select, [role="menuitem"], [role="tab"], [role="link"]',
+      'button, a, [role="button"], [role="menuitem"], [role="tab"], [role="link"]',
     );
-    return clickable || element;
+    if (clickable) return clickable;
+    const field = element.closest("input, textarea, select");
+    if (field) return field;
+    const wrapper = element.closest(
+      "label, .form-row, .field, .form-field, [data-field], [data-form-row], [role='group']",
+    );
+    if (wrapper) {
+      const nestedControl = wrapper.querySelector("input, textarea, select");
+      if (nestedControl instanceof HTMLElement) return nestedControl;
+      return wrapper;
+    }
+    return element;
+  }
+
+  function resolveLabelControl(element) {
+    const label = element.closest("label");
+    if (!label) return null;
+    if (label.control instanceof HTMLElement) return label.control;
+    const forId = label.getAttribute("for");
+    if (!forId) return null;
+    const control = document.getElementById(forId);
+    return control instanceof HTMLElement ? control : null;
   }
 
   function isOverlayElement(element) {
@@ -157,11 +183,41 @@
     );
   }
 
-  function captureTarget(element) {
+  function resolveGuideTargetFromEvent(event) {
+    const path = typeof event.composedPath === "function" ? event.composedPath() : [];
+    const elements = path.filter((item) => item instanceof HTMLElement);
+    if (elements.some(isOverlayElement)) return null;
+    const source = elements[0] || (event.target instanceof HTMLElement ? event.target : null);
+    if (!source) return null;
+    const element = getTargetElement(source) || source;
+    const selector = getElementSelector(element);
+    const confidence = getSelectorConfidence(element, selector);
+    const tagName = element.tagName.toLowerCase();
+    const hasReliableElement =
+      confidence !== "weak" &&
+      tagName !== "body" &&
+      tagName !== "html" &&
+      Math.max(0, element.getBoundingClientRect().width) *
+        Math.max(0, element.getBoundingClientRect().height) >
+        0;
+    return {
+      element,
+      anchorMode: hasReliableElement ? "element" : "rect",
+      reason: hasReliableElement ? "dom-target" : "visual-rect",
+    };
+  }
+
+  function captureTarget(element, anchorMode = "element", event) {
     const rect = element.getBoundingClientRect();
     const selector = getElementSelector(element);
     const tagName = element.tagName.toLowerCase();
     const type = element.getAttribute("type") || "";
+    const viewportX = Math.round(
+      typeof event?.clientX === "number" ? event.clientX : rect.left + rect.width / 2,
+    );
+    const viewportY = Math.round(
+      typeof event?.clientY === "number" ? event.clientY : rect.top + rect.height / 2,
+    );
     return {
       selector,
       selectorConfidence: getSelectorConfidence(element, selector),
@@ -179,6 +235,7 @@
       type,
       href: tagName === "a" ? getSafeLinkHref(element) : "",
       pageUrl: normalizeGuideUrl(window.location.href),
+      anchorMode,
       rect: {
         x: Math.round(rect.x),
         y: Math.round(rect.y),
@@ -186,6 +243,12 @@
         height: Math.round(rect.height),
         documentX: Math.round(rect.x + window.scrollX),
         documentY: Math.round(rect.y + window.scrollY),
+      },
+      anchorPoint: {
+        viewportX,
+        viewportY,
+        documentX: Math.round(viewportX + window.scrollX),
+        documentY: Math.round(viewportY + window.scrollY),
       },
     };
   }
@@ -249,7 +312,7 @@
     );
   }
 
-  function findTarget(step) {
+  function findTargetElement(step) {
     const target = step?.target || {};
     const attempts = [target.selector, target.fallbackPath].filter(Boolean);
     for (const selector of attempts) {
@@ -275,6 +338,24 @@
       );
       if (match) return match;
     }
+    if (target.placeholder) {
+      const match = candidates.find(
+        (item) => item.getAttribute("placeholder") === target.placeholder,
+      );
+      if (match) return match;
+    }
+    if (target.name) {
+      const match = candidates.find((item) => item.getAttribute("name") === target.name);
+      if (match) return match;
+    }
+    if (target.type) {
+      const match = candidates.find(
+        (item) =>
+          item.tagName.toLowerCase() === (target.fallbackTagName || "").toLowerCase() &&
+          item.getAttribute("type") === target.type,
+      );
+      if (match) return match;
+    }
     if (target.fallbackText) {
       return (
         candidates.find((item) =>
@@ -283,6 +364,50 @@
       );
     }
     return null;
+  }
+
+  function isSafeRectFallback(step) {
+    const pageUrl = step?.target?.pageUrl || step?.pageUrl || "";
+    return !pageUrl || normalizeGuideUrl(window.location.href) === normalizeGuideUrl(pageUrl);
+  }
+
+  function getFallbackRect(step) {
+    const target = step?.target || {};
+    const rect = target.rect || {};
+    const anchor = target.anchorPoint || {};
+    if (typeof rect.documentX === "number" && typeof rect.documentY === "number") {
+      return {
+        left: rect.documentX - window.scrollX,
+        top: rect.documentY - window.scrollY,
+        right: rect.documentX - window.scrollX + Math.max(8, rect.width || 8),
+        bottom: rect.documentY - window.scrollY + Math.max(8, rect.height || 8),
+        width: Math.max(8, rect.width || 8),
+        height: Math.max(8, rect.height || 8),
+        documentX: rect.documentX,
+        documentY: rect.documentY,
+      };
+    }
+    if (typeof anchor.documentX === "number" && typeof anchor.documentY === "number") {
+      return {
+        left: anchor.documentX - window.scrollX - 4,
+        top: anchor.documentY - window.scrollY - 4,
+        right: anchor.documentX - window.scrollX + 4,
+        bottom: anchor.documentY - window.scrollY + 4,
+        width: 8,
+        height: 8,
+        documentX: anchor.documentX - 4,
+        documentY: anchor.documentY - 4,
+      };
+    }
+    return null;
+  }
+
+  function resolvePlaybackTarget(step) {
+    const element = findTargetElement(step);
+    if (element) return { element, rectFallback: false };
+    if (!isSafeRectFallback(step)) return null;
+    const rect = getFallbackRect(step);
+    return rect ? { rect, rectFallback: true } : null;
   }
 
   function positionPopup(popup, rect, placement) {
@@ -348,27 +473,36 @@
     const { guide, stepIndex } = activePlayback;
     const step = guide.steps[stepIndex];
     if (!step) return stopPlayback();
-    const target = findTarget(step);
-    if (!target) {
+    const resolvedTarget = resolvePlaybackTarget(step);
+    if (!resolvedTarget) {
       renderMissingStep(step);
       return;
     }
-    if (step.playback?.autoScroll !== false && !isElementVisible(target)) {
-      target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    if (resolvedTarget.element && step.playback?.autoScroll !== false && !isElementVisible(resolvedTarget.element)) {
+      resolvedTarget.element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      await new Promise((resolve) => setTimeout(resolve, 420));
+    }
+    if (resolvedTarget.rectFallback && step.playback?.autoScroll !== false) {
+      window.scrollTo({
+        top: Math.max(0, resolvedTarget.rect.documentY - window.innerHeight / 2),
+        behavior: "smooth",
+      });
       await new Promise((resolve) => setTimeout(resolve, 420));
     }
 
     const layer = ensureOverlayLayer();
     layer.innerHTML = "";
-    const rect = target.getBoundingClientRect();
+    const rect = resolvedTarget.element
+      ? resolvedTarget.element.getBoundingClientRect()
+      : getFallbackRect(step);
     if (step.playback?.dimPage) {
       layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
     }
     if (step.playback?.highlightTarget !== false) {
       const highlight = document.createElement("div");
       highlight.className = "click-guide-target-highlight";
-      highlight.style.left = `${rect.left + window.scrollX}px`;
-      highlight.style.top = `${rect.top + window.scrollY}px`;
+      highlight.style.left = `${resolvedTarget.rectFallback ? rect.documentX : rect.left + window.scrollX}px`;
+      highlight.style.top = `${resolvedTarget.rectFallback ? rect.documentY : rect.top + window.scrollY}px`;
       highlight.style.width = `${Math.max(8, rect.width)}px`;
       highlight.style.height = `${Math.max(8, rect.height)}px`;
       layer.append(highlight);
@@ -376,9 +510,8 @@
     {
       const popup = document.createElement("div");
       popup.id = "click-guide-popup";
-      const compact = step.playback?.showPopup === false;
-      const allowsManualNext =
-        step.advance?.mode === "manual" || step.advance?.allowManualFallback !== false;
+      const compact = step.playback?.showInstructionText === false || step.playback?.showPopup === false;
+      const isAutoAdvance = step.advance?.mode && step.advance.mode !== "manual";
       if (compact) popup.className = "click-guide-compact";
       popup.innerHTML = compact
         ? `
@@ -395,6 +528,7 @@
           <div class="click-guide-eyebrow">Click Guide</div>
           <h2></h2>
           <p></p>
+          <div class="click-guide-warning" hidden></div>
           <div class="click-guide-count"></div>
           <div class="click-guide-actions">
             <button type="button" data-action="prev">Previous</button>
@@ -405,13 +539,17 @@
       if (!compact) {
         popup.querySelector("h2").textContent = step.title || "Untitled step";
         popup.querySelector("p").textContent = step.body || "";
+        if (resolvedTarget.rectFallback) {
+          const warning = popup.querySelector(".click-guide-warning");
+          warning.hidden = false;
+          warning.textContent = "Original element not found. Showing saved position.";
+        }
       }
       popup.querySelector(".click-guide-count").textContent = `Step ${stepIndex + 1} of ${guide.steps.length}`;
       popup.querySelector('[data-action="prev"]').disabled = stepIndex === 0;
       const nextButton = popup.querySelector('[data-action="next"]');
-      nextButton.hidden = !allowsManualNext;
       nextButton.textContent =
-        stepIndex >= guide.steps.length - 1 ? "Finish" : "Next";
+        stepIndex >= guide.steps.length - 1 ? "Finish" : isAutoAdvance ? "Continue anyway" : "Next";
       layer.append(popup);
       positionPopup(popup, rect, step.playback?.popupPlacement || "auto");
       popup.addEventListener("click", (event) => {
@@ -420,7 +558,7 @@
         const action = event.target?.dataset?.action;
         if (event.target?.classList?.contains("click-guide-close")) stopPlayback();
         if (action === "prev") goToStep(activePlayback.stepIndex - 1);
-        if (action === "next" && allowsManualNext) goToStep(activePlayback.stepIndex + 1);
+        if (action === "next") goToStep(activePlayback.stepIndex + 1);
         if (action === "close") stopPlayback();
       });
     }
@@ -513,12 +651,15 @@
     safeStorage(() => chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]));
   }
 
-  function finishSelectMode(target) {
-    const payload = captureTarget(target);
+  function finishSelectMode(selection, event) {
+    const payload = captureTarget(selection.element, selection.anchorMode, event);
     mode = "idle";
     clearHover();
     safeStorage(() => chrome.storage.local.set({ selectedGuideTarget: payload }));
-    showSelectionToast("Element selected. Open Click Guide to write this step.", 6000);
+    showSelectionToast(
+      `${selection.anchorMode === "rect" ? "Visual area" : "Element"} selected. Open Click Guide to write this step.`,
+      6000,
+    );
   }
 
   function onMouseMove(event) {
@@ -535,12 +676,12 @@
 
   function onClick(event) {
     if (mode !== "builder-selecting-target") return;
-    const target = event.target;
-    if (!(target instanceof HTMLElement) || isOverlayElement(target)) return;
+    const selection = resolveGuideTargetFromEvent(event);
+    if (!selection) return;
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
-    finishSelectMode(getTargetElement(target));
+    finishSelectMode(selection, event);
   }
 
   document.addEventListener("mousemove", onMouseMove, true);
