@@ -71,6 +71,27 @@
     return (value || "").replace(/\s+/g, " ").trim().slice(0, max);
   }
 
+  function getFallbackText(element) {
+    if (isUserEditableElement(element)) return "";
+    return getTextSnippet(element.innerText || element.textContent || "");
+  }
+
+  function isUserEditableElement(element) {
+    const tagName = element.tagName?.toLowerCase();
+    return tagName === "input" || tagName === "textarea" || element.isContentEditable;
+  }
+
+  function safeToken(value, max = 120) {
+    return getTextSnippet(value, max);
+  }
+
+  function safeClassList(element) {
+    return Array.from(element.classList || [])
+      .map((cls) => safeToken(cls, 80))
+      .filter((cls) => /^[a-zA-Z0-9_-]+$/.test(cls) && !isLikelyGeneratedClassName(cls))
+      .slice(0, 12);
+  }
+
   function buildFallbackPath(element) {
     const segments = [];
     let current = element;
@@ -243,18 +264,16 @@
     return {
       selector,
       selectorConfidence: getSelectorConfidence(element, selector),
-      fallbackText: getTextSnippet(element.innerText || element.textContent || ""),
-      fallbackAriaLabel: element.getAttribute("aria-label") || "",
-      fallbackRole: element.getAttribute("role") || "",
+      fallbackText: getFallbackText(element),
+      fallbackAriaLabel: safeToken(element.getAttribute("aria-label") || "", 160),
+      fallbackRole: safeToken(element.getAttribute("role") || "", 80),
       fallbackTagName: tagName,
       fallbackPath: buildFallbackPath(element),
-      id: element.id || "",
-      classList: Array.from(element.classList || []).filter(
-        (cls) => !isLikelyGeneratedClassName(cls),
-      ),
-      placeholder: element.getAttribute("placeholder") || "",
-      name: element.getAttribute("name") || "",
-      type,
+      id: safeToken(element.id || "", 160),
+      classList: safeClassList(element),
+      placeholder: safeToken(element.getAttribute("placeholder") || "", 160),
+      name: safeToken(element.getAttribute("name") || "", 120),
+      type: safeToken(type, 80),
       href: tagName === "a" ? getSafeLinkHref(element) : "",
       pageUrl: normalizeGuideUrl(window.location.href),
       anchorMode,
