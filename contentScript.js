@@ -20,6 +20,7 @@
   let activePlayback = null;
   let repositionRaf = null;
   let urlWatchTimer = null;
+  let selectionToastTimer = null;
 
   function safeStorage(fn) {
     try {
@@ -219,6 +220,15 @@
     urlWatchTimer = null;
   }
 
+  function hideSelectionToast() {
+    if (selectionToastTimer) clearTimeout(selectionToastTimer);
+    selectionToastTimer = null;
+    const toast = document.getElementById("click-guide-selection-toast");
+    if (!toast) return false;
+    toast.remove();
+    return true;
+  }
+
   function clampToViewport(left, top, width, height) {
     const margin = 12;
     return {
@@ -367,6 +377,8 @@
       const popup = document.createElement("div");
       popup.id = "click-guide-popup";
       const compact = step.playback?.showPopup === false;
+      const allowsManualNext =
+        step.advance?.mode === "manual" || step.advance?.allowManualFallback !== false;
       if (compact) popup.className = "click-guide-compact";
       popup.innerHTML = compact
         ? `
@@ -396,7 +408,9 @@
       }
       popup.querySelector(".click-guide-count").textContent = `Step ${stepIndex + 1} of ${guide.steps.length}`;
       popup.querySelector('[data-action="prev"]').disabled = stepIndex === 0;
-      popup.querySelector('[data-action="next"]').textContent =
+      const nextButton = popup.querySelector('[data-action="next"]');
+      nextButton.hidden = !allowsManualNext;
+      nextButton.textContent =
         stepIndex >= guide.steps.length - 1 ? "Finish" : "Next";
       layer.append(popup);
       positionPopup(popup, rect, step.playback?.popupPlacement || "auto");
@@ -406,7 +420,7 @@
         const action = event.target?.dataset?.action;
         if (event.target?.classList?.contains("click-guide-close")) stopPlayback();
         if (action === "prev") goToStep(activePlayback.stepIndex - 1);
-        if (action === "next") goToStep(activePlayback.stepIndex + 1);
+        if (action === "next" && allowsManualNext) goToStep(activePlayback.stepIndex + 1);
         if (action === "close") stopPlayback();
       });
     }
@@ -478,24 +492,33 @@
   function startSelectMode() {
     stopPlayback();
     mode = "builder-selecting-target";
-    showSelectionToast();
+    showSelectionToast("Select an element for this guide step");
   }
 
-  function showSelectionToast() {
-    const existing = document.getElementById("click-guide-selection-toast");
-    if (existing) existing.remove();
+  function showSelectionToast(message, durationMs = 0) {
+    hideSelectionToast();
     const toast = document.createElement("div");
     toast.id = "click-guide-selection-toast";
-    toast.textContent = "Select an element for this guide step";
+    toast.textContent = message;
     document.body.appendChild(toast);
+    if (durationMs > 0) {
+      selectionToastTimer = setTimeout(hideSelectionToast, durationMs);
+    }
+  }
+
+  function cancelSelectMode() {
+    mode = "idle";
+    clearHover();
+    hideSelectionToast();
+    safeStorage(() => chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]));
   }
 
   function finishSelectMode(target) {
     const payload = captureTarget(target);
     mode = "idle";
     clearHover();
-    document.getElementById("click-guide-selection-toast")?.remove();
     safeStorage(() => chrome.storage.local.set({ selectedGuideTarget: payload }));
+    showSelectionToast("Element selected. Open Click Guide to write this step.", 6000);
   }
 
   function onMouseMove(event) {
@@ -526,10 +549,10 @@
     "keydown",
     (event) => {
       if (event.key === "Escape" && mode === "builder-selecting-target") {
-        mode = "idle";
-        clearHover();
-        document.getElementById("click-guide-selection-toast")?.remove();
+        cancelSelectMode();
+        return;
       }
+      if (event.key === "Escape") hideSelectionToast();
       if (event.key === "Escape" && mode === "playing-guide") stopPlayback();
     },
     true,
