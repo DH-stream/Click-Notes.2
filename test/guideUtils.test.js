@@ -80,6 +80,21 @@ test("prepareImportedGuide rejects a step without target or saved position", () 
   );
 });
 
+test("prepareImportedGuide rejects unsafe start URLs", () => {
+  assert.throws(
+    () =>
+      prepareImportedGuide(
+        {
+          title: "Unsafe",
+          startUrl: "javascript:alert(1)",
+          steps: [{ title: "Step", target: { selector: "#safe" } }],
+        },
+        [],
+      ),
+    /safe absolute URL/,
+  );
+});
+
 test("prepareImportedGuide dedupes imported step ids", () => {
   const imported = prepareImportedGuide(
     {

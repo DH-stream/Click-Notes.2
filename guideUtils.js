@@ -182,6 +182,10 @@
     if (!String(guide.startUrl || "").trim()) {
       throw new Error("Import failed: guide startUrl is required");
     }
+    const startUrl = normalizeGuideUrl(guide.startUrl);
+    if (!startUrl) {
+      throw new Error("Import failed: guide startUrl must be a safe absolute URL");
+    }
     guide.steps.forEach((step, index) => {
       if (!String(step?.title || step?.body || "").trim()) {
         throw new Error(`Import failed: step ${index + 1} needs title or body`);
@@ -201,7 +205,7 @@
       schemaVersion: Number(guide.schemaVersion) || 1,
       title: String(guide.title).trim(),
       description: String(guide.description || ""),
-      startUrl: normalizeGuideUrl(guide.startUrl),
+      startUrl,
       createdAt: guide.createdAt || timestamp,
       updatedAt: timestamp,
       version: Number(guide.version) || 1,

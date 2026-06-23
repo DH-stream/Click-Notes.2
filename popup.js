@@ -327,7 +327,8 @@ function waitForTabComplete(tabId) {
 async function exportGuide(guideId) {
   const guide = state.guides.find((item) => item.id === guideId);
   if (!guide) return;
-  const blob = new Blob([JSON.stringify(guide, null, 2)], { type: "application/json" });
+  const exportableGuide = { ...guide, schemaVersion: guide.schemaVersion || 1 };
+  const blob = new Blob([JSON.stringify(exportableGuide, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

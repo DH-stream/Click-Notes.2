@@ -140,8 +140,13 @@
   </main>
   <script>
     document.getElementById("showDynamic").addEventListener("click", () => {
-      document.getElementById("dynamicHost").innerHTML =
-        '<div class="dynamic-target" data-guide-id="dynamic-target">Dynamic element appeared</div>';
+      const host = document.getElementById("dynamicHost");
+      host.textContent = "";
+      const target = document.createElement("div");
+      target.className = "dynamic-target";
+      target.dataset.guideId = "dynamic-target";
+      target.textContent = "Dynamic element appeared";
+      host.append(target);
     });
   </script>
 </body>
