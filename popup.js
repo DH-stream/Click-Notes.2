@@ -231,7 +231,7 @@ function renderStepEditor() {
     weakHint,
     field("Title", title),
     field("Body / instruction", body),
-    checkbox("showPopup", "Show popup", step.playback?.showPopup !== false),
+    checkbox("showPopup", "Show instruction text", step.playback?.showPopup !== false),
     checkbox("highlightTarget", "Highlight target", step.playback?.highlightTarget !== false),
     checkbox("autoScroll", "Scroll automatically to element", step.playback?.autoScroll !== false),
     checkbox("dimPage", "Dim rest of page", step.playback?.dimPage !== false),
@@ -258,6 +258,10 @@ async function createGuideFromTab() {
 async function deleteGuide(guideId) {
   if (!confirm("Delete this guide?")) return;
   state.guides = state.guides.filter((guide) => guide.id !== guideId);
+  const { pendingGuideEdit } = await chrome.storage.local.get({ pendingGuideEdit: null });
+  if (pendingGuideEdit?.guideId === guideId) {
+    await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
+  }
   await saveGuides();
   setStatus("Guide deleted");
   render();
@@ -398,9 +402,16 @@ async function consumePendingSelection() {
     pendingGuideEdit: null,
     selectedGuideTarget: null,
   });
-  if (!pendingGuideEdit || !selectedGuideTarget) return;
+  if (!pendingGuideEdit) {
+    if (selectedGuideTarget) await chrome.storage.local.remove("selectedGuideTarget");
+    return;
+  }
   const guide = state.guides.find((item) => item.id === pendingGuideEdit.guideId);
-  if (!guide) return;
+  if (!guide) {
+    await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
+    return;
+  }
+  if (!selectedGuideTarget) return;
   await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
   state.activeGuideId = guide.id;
   const existing = guide.steps.find((step) => step.id === pendingGuideEdit.stepId);
