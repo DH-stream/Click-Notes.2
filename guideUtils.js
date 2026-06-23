@@ -71,6 +71,7 @@
     const target = step?.target || {};
     const showInstructionText =
       step?.playback?.showInstructionText ?? step?.playback?.showPopup;
+    const fallbackTagName = String(target.fallbackTagName || "").trim().toLowerCase();
     return {
       id: step?.id || makeId("step"),
       order: index + 1,
@@ -84,7 +85,7 @@
         fallbackText: String(target.fallbackText || ""),
         fallbackAriaLabel: String(target.fallbackAriaLabel || ""),
         fallbackRole: String(target.fallbackRole || ""),
-        fallbackTagName: String(target.fallbackTagName || ""),
+        fallbackTagName: /^[a-z][a-z0-9-]*$/.test(fallbackTagName) ? fallbackTagName : "",
         id: String(target.id || ""),
         classList: Array.isArray(target.classList) ? target.classList : [],
         placeholder: String(target.placeholder || ""),

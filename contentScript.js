@@ -321,9 +321,16 @@
         if (element instanceof HTMLElement) return element;
       } catch {}
     }
-    const candidates = Array.from(
-      document.querySelectorAll(target.fallbackTagName || "button, a, input, textarea, select, [role]"),
-    ).filter((item) => item instanceof HTMLElement);
+    let candidates = [];
+    try {
+      candidates = Array.from(
+        document.querySelectorAll(target.fallbackTagName || "button, a, input, textarea, select, [role]"),
+      ).filter((item) => item instanceof HTMLElement);
+    } catch {
+      candidates = Array.from(
+        document.querySelectorAll("button, a, input, textarea, select, [role]"),
+      ).filter((item) => item instanceof HTMLElement);
+    }
     if (target.fallbackAriaLabel) {
       const match = candidates.find(
         (item) => item.getAttribute("aria-label") === target.fallbackAriaLabel,

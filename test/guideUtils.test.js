@@ -142,3 +142,18 @@ test("normalizeStep preserves rect fallback shape and showInstructionText", () =
   assert.equal(normalized.playback.showInstructionText, false);
   assert.equal(normalized.playback.showPopup, false);
 });
+
+test("normalizeStep drops unsafe fallback tag names", () => {
+  const normalized = normalizeStep(
+    {
+      title: "Unsafe tag",
+      target: {
+        selector: "#target",
+        fallbackTagName: "button, body {",
+      },
+    },
+    0,
+  );
+
+  assert.equal(normalized.target.fallbackTagName, "");
+});
