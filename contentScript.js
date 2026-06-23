@@ -208,16 +208,17 @@
   }
 
   function captureTarget(element, anchorMode = "element", event) {
-    const rect = element.getBoundingClientRect();
+    const sourceRect = element.getBoundingClientRect();
     const selector = getElementSelector(element);
     const tagName = element.tagName.toLowerCase();
     const type = element.getAttribute("type") || "";
     const viewportX = Math.round(
-      typeof event?.clientX === "number" ? event.clientX : rect.left + rect.width / 2,
+      typeof event?.clientX === "number" ? event.clientX : sourceRect.left + sourceRect.width / 2,
     );
     const viewportY = Math.round(
-      typeof event?.clientY === "number" ? event.clientY : rect.top + rect.height / 2,
+      typeof event?.clientY === "number" ? event.clientY : sourceRect.top + sourceRect.height / 2,
     );
+    const rect = getCapturedRect(element, sourceRect, anchorMode, viewportX, viewportY);
     return {
       selector,
       selectorConfidence: getSelectorConfidence(element, selector),
@@ -251,6 +252,25 @@
         documentY: Math.round(viewportY + window.scrollY),
       },
     };
+  }
+
+  function getCapturedRect(element, sourceRect, anchorMode, viewportX, viewportY) {
+    const tagName = element.tagName.toLowerCase();
+    const isPageSized =
+      tagName === "body" ||
+      tagName === "html" ||
+      sourceRect.width >= window.innerWidth * 0.95 ||
+      sourceRect.height >= window.innerHeight * 0.95;
+    if (anchorMode === "rect" && isPageSized) {
+      const size = 40;
+      return {
+        x: Math.max(0, viewportX - size / 2),
+        y: Math.max(0, viewportY - size / 2),
+        width: size,
+        height: size,
+      };
+    }
+    return sourceRect;
   }
 
   function getSafeLinkHref(element) {
