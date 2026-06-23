@@ -624,7 +624,8 @@
     if (stepIndex >= activePlayback.guide.steps.length) return stopPlayback();
     const nextStep = activePlayback.guide.steps[stepIndex];
     const nextPage = nextStep?.pageUrl || activePlayback.guide.startUrl;
-    if (nextPage && normalizeGuideUrl(window.location.href) !== normalizeGuideUrl(nextPage)) {
+    const safeNextPage = normalizeGuideUrl(nextPage);
+    if (safeNextPage && normalizeGuideUrl(window.location.href) !== safeNextPage) {
       safeStorage(() =>
         chrome.storage.local.set({
           activePlayback: {
@@ -634,7 +635,7 @@
           },
         }),
       );
-      window.location.assign(nextPage);
+      window.location.assign(safeNextPage);
       return;
     }
     activePlayback.stepIndex = stepIndex;
