@@ -78,7 +78,7 @@
       createdAt: guide?.createdAt || timestamp,
       updatedAt: guide?.updatedAt || timestamp,
       version: Number(guide?.version) || 1,
-      steps: Array.isArray(guide?.steps) ? guide.steps.map(normalizeStep) : [],
+      steps: normalizeSteps(guide?.steps),
     };
   }
 
@@ -193,6 +193,17 @@
     return makeId(prefix);
   }
 
+  function normalizeSteps(steps) {
+    if (!Array.isArray(steps)) return [];
+    const seenStepIds = new Set();
+    return steps.map((step, index) => {
+      const normalized = normalizeStep(step, index);
+      if (!normalized.id || seenStepIds.has(normalized.id)) normalized.id = makeId("step");
+      seenStepIds.add(normalized.id);
+      return normalized;
+    });
+  }
+
   function stepHasTargetOrAnchor(step) {
     const target = step?.target || {};
     const rect = target.rect || {};
@@ -244,17 +255,8 @@
     const timestamp = nowIso();
     const guideId = normalizeEntityId(guide.id, "guide");
     const id = existingIds.includes(guideId) ? makeId("guide") : guideId;
-    const seenStepIds = new Set();
     const normalizedGuide = normalizeGuide({ ...guide, id, startUrl, updatedAt: timestamp });
-    return {
-      ...normalizedGuide,
-      steps: guide.steps.map((step, index) => {
-        const normalized = normalizeStep(step, index);
-        if (!normalized.id || seenStepIds.has(normalized.id)) normalized.id = makeId("step");
-        seenStepIds.add(normalized.id);
-        return normalized;
-      }),
-    };
+    return normalizedGuide;
   }
 
   return {

@@ -298,3 +298,18 @@ test("normalizeGuide sanitizes existing local guides", () => {
   assert.equal(normalized.steps[0].target.href, "");
   assert.equal("value" in normalized.steps[0].target, false);
 });
+
+test("normalizeGuide dedupes existing local step ids", () => {
+  const normalized = normalizeGuide({
+    id: "guide-local",
+    title: "Local duplicate steps",
+    startUrl: "https://example.com",
+    steps: [
+      { id: "step-duplicate", title: "One", target: { selector: "#one" } },
+      { id: "step-duplicate", title: "Two", target: { selector: "#two" } },
+    ],
+  });
+
+  assert.equal(normalized.steps[0].id, "step-duplicate");
+  assert.notEqual(normalized.steps[1].id, "step-duplicate");
+});
