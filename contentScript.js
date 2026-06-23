@@ -452,6 +452,7 @@
     let picked = desired.right;
     for (const key of order) {
       const option = desired[key];
+      if (!option) continue;
       if (
         option.left >= 8 &&
         option.top >= 8 &&

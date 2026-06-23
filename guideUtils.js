@@ -103,10 +103,10 @@
         highlightTarget: step?.playback?.highlightTarget !== false,
         dimPage: step?.playback?.dimPage !== false,
         autoScroll: step?.playback?.autoScroll !== false,
-        popupPlacement: step?.playback?.popupPlacement || "auto",
+        popupPlacement: normalizePlacement(step?.playback?.popupPlacement),
       },
       advance: {
-        mode: step?.advance?.mode || "manual",
+        mode: normalizeAdvanceMode(step?.advance?.mode),
         value: step?.advance?.value || "",
         allowManualFallback: step?.advance?.allowManualFallback !== false,
       },
@@ -160,6 +160,16 @@
       .map((item) => String(item || "").trim())
       .filter((item) => /^[a-zA-Z0-9_-]{1,80}$/.test(item))
       .slice(0, 12);
+  }
+
+  function normalizePlacement(value) {
+    const placement = String(value || "auto");
+    return ["auto", "top", "right", "bottom", "left"].includes(placement) ? placement : "auto";
+  }
+
+  function normalizeAdvanceMode(value) {
+    const mode = String(value || "manual");
+    return ["manual", "urlMatch", "elementVisible"].includes(mode) ? mode : "manual";
   }
 
   function stepHasTargetOrAnchor(step) {

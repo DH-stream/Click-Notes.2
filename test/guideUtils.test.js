@@ -187,3 +187,20 @@ test("normalizeStep sanitizes imported fallback metadata", () => {
   assert.equal(normalized.target.href, "");
   assert.equal("value" in normalized.target, false);
 });
+
+test("normalizeStep defaults unsafe playback placement and advance mode", () => {
+  const normalized = normalizeStep(
+    {
+      title: "Unsafe controls",
+      target: { selector: "#target" },
+      playback: { popupPlacement: "center<script>" },
+      advance: { mode: "waitForever", value: "#done", allowManualFallback: false },
+    },
+    0,
+  );
+
+  assert.equal(normalized.playback.popupPlacement, "auto");
+  assert.equal(normalized.advance.mode, "manual");
+  assert.equal(normalized.advance.value, "#done");
+  assert.equal(normalized.advance.allowManualFallback, false);
+});
