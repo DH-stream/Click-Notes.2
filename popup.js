@@ -289,8 +289,7 @@ async function playGuide(guideId) {
   if (!guide) return;
   let tab = await getActiveTab();
   if (!tab?.id) return;
-  const firstPageUrl = guide.steps?.[0]?.pageUrl || guide.startUrl;
-  const safeFirstPageUrl = safeGuideUrl(firstPageUrl);
+  const safeFirstPageUrl = safeGuideUrl(guide.startUrl);
   if (!safeFirstPageUrl) return setStatus("Guide has no safe start URL");
   if (normalizeGuideUrl(tab.url || "") !== safeFirstPageUrl) {
     await chrome.tabs.update(tab.id, { url: safeFirstPageUrl });
