@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   createGuide,
   createStep,
+  normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
   prepareImportedGuide,
@@ -268,4 +269,32 @@ test("prepareImportedGuide replaces unsafe imported ids", () => {
 
   assert.match(imported.id, /^guide-/);
   assert.match(imported.steps[0].id, /^step-/);
+});
+
+test("normalizeGuide sanitizes existing local guides", () => {
+  const normalized = normalizeGuide({
+    id: "guide <script>",
+    title: "Local ".repeat(80),
+    startUrl: "https://example.com/path?token=secret#hash",
+    steps: [
+      {
+        id: "step <script>",
+        title: "Step",
+        target: {
+          selector: "#target",
+          fallbackTagName: "button, body {",
+          href: "javascript:alert(1)",
+          value: "secret",
+        },
+      },
+    ],
+  });
+
+  assert.match(normalized.id, /^guide-/);
+  assert.equal(normalized.title.length, 140);
+  assert.equal(normalized.startUrl, "https://example.com/path");
+  assert.match(normalized.steps[0].id, /^step-/);
+  assert.equal(normalized.steps[0].target.fallbackTagName, "");
+  assert.equal(normalized.steps[0].target.href, "");
+  assert.equal("value" in normalized.steps[0].target, false);
 });

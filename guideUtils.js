@@ -67,6 +67,21 @@
     };
   }
 
+  function normalizeGuide(guide) {
+    const timestamp = nowIso();
+    return {
+      id: normalizeEntityId(guide?.id, "guide"),
+      schemaVersion: Number(guide?.schemaVersion) || 1,
+      title: textSnippet(guide?.title || "Untitled guide", 140) || "Untitled guide",
+      description: textSnippet(guide?.description, 500),
+      startUrl: normalizeGuideUrl(guide?.startUrl || ""),
+      createdAt: guide?.createdAt || timestamp,
+      updatedAt: guide?.updatedAt || timestamp,
+      version: Number(guide?.version) || 1,
+      steps: Array.isArray(guide?.steps) ? guide.steps.map(normalizeStep) : [],
+    };
+  }
+
   function normalizeStep(step, index) {
     const target = step?.target || {};
     const showInstructionText =
@@ -230,15 +245,9 @@
     const guideId = normalizeEntityId(guide.id, "guide");
     const id = existingIds.includes(guideId) ? makeId("guide") : guideId;
     const seenStepIds = new Set();
+    const normalizedGuide = normalizeGuide({ ...guide, id, startUrl, updatedAt: timestamp });
     return {
-      id,
-      schemaVersion: Number(guide.schemaVersion) || 1,
-      title: textSnippet(guide.title, 140),
-      description: textSnippet(guide.description, 500),
-      startUrl,
-      createdAt: guide.createdAt || timestamp,
-      updatedAt: timestamp,
-      version: Number(guide.version) || 1,
+      ...normalizedGuide,
       steps: guide.steps.map((step, index) => {
         const normalized = normalizeStep(step, index);
         if (!normalized.id || seenStepIds.has(normalized.id)) normalized.id = makeId("step");
@@ -252,6 +261,7 @@
     createGuide,
     createStep,
     makeId,
+    normalizeGuide,
     normalizeGuideUrl,
     normalizeStep,
     prepareImportedGuide,

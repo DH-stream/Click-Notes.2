@@ -5,6 +5,7 @@ const panel = document.getElementById("panel");
 const {
   createGuide,
   createStep,
+  normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
   prepareImportedGuide,
@@ -57,7 +58,7 @@ async function ensureInjected(tabId) {
 
 async function loadGuides() {
   const { guides } = await chrome.storage.local.get({ guides: [] });
-  state.guides = Array.isArray(guides) ? guides : [];
+  state.guides = Array.isArray(guides) ? guides.map(normalizeGuide) : [];
 }
 
 async function saveGuides() {
