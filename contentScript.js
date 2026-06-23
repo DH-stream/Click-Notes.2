@@ -279,7 +279,7 @@
     try {
       return normalizeGuideUrl(new URL(href, window.location.href).href);
     } catch {
-      return href.split("#")[0].split("?")[0];
+      return "";
     }
   }
 
