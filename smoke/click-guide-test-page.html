@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Click Guide Smoke Test</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f1e8;
+      color: #181818;
+    }
+
+    main {
+      min-height: 140vh;
+      padding: 48px;
+    }
+
+    .hero {
+      max-width: 720px;
+      padding: 32px;
+      background: #fffaf1;
+      border: 1px solid #dfd5c5;
+      border-radius: 20px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.08);
+    }
+
+    .primary {
+      margin-top: 22px;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      background: #111;
+      color: #fff;
+      font-weight: 700;
+    }
+
+    .panel {
+      margin-top: 520px;
+      max-width: 420px;
+      padding: 24px;
+      background: #18211c;
+      color: #f8f5ef;
+      border-radius: 18px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="hero">
+      <p data-guide-id="smoke-intro-label">Internal onboarding portal</p>
+      <h1>Book a delivery slot</h1>
+      <button class="primary" data-guide-id="smoke-start-button">Start booking</button>
+    </section>
+
+    <section class="panel" data-guide-id="smoke-confirm-panel">
+      <h2>Confirm shipment details</h2>
+      <p>Review the delivery window before submitting anything.</p>
+    </section>
+  </main>
+</body>
+</html>

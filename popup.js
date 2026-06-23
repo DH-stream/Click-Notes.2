@@ -1,6 +1,7 @@
 const app = document.getElementById("app");
 const statusEl = document.getElementById("status");
 const importFile = document.getElementById("importFile");
+const panel = document.getElementById("panel");
 const {
   createGuide,
   createStep,
@@ -95,6 +96,10 @@ function renderList() {
     button("Import guide", () => importFile.click()),
   ]);
   app.append(toolbar);
+  app.append(el("div", {
+    className: "drop-zone",
+    textContent: "Drop a .clickguide file here to start playback",
+  }));
 
   if (!state.guides.length) {
     app.append(el("div", { className: "list-empty", textContent: "No guides yet" }));
@@ -311,7 +316,7 @@ async function exportGuide(guideId) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${guide.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-click-guide.json`;
+  a.download = `${guide.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "guide"}.clickguide`;
   a.click();
   URL.revokeObjectURL(url);
   setStatus("Guide exported");
@@ -326,6 +331,7 @@ async function handleImport(file) {
     await saveGuides();
     setStatus("Guide imported");
     render();
+    await playGuide(imported.id);
   } catch {
     setStatus("Import failed");
   } finally {
@@ -413,6 +419,28 @@ async function consumePendingSelection() {
 }
 
 importFile.addEventListener("change", () => handleImport(importFile.files?.[0]));
+
+["dragenter", "dragover"].forEach((eventName) => {
+  document.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    panel?.classList.add("drag-over");
+  });
+});
+
+["dragleave", "drop"].forEach((eventName) => {
+  document.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    panel?.classList.remove("drag-over");
+  });
+});
+
+document.addEventListener("drop", (event) => {
+  const file = Array.from(event.dataTransfer?.files || []).find((item) =>
+    item.name.toLowerCase().endsWith(".clickguide") ||
+    item.name.toLowerCase().endsWith(".json"),
+  );
+  handleImport(file);
+});
 
 (async function init() {
   try {

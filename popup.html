@@ -18,7 +18,7 @@
       --text-muted: #666;
       --danger: #f87171;
       --warn: #facc15;
-      --radius: 4px;
+      --radius: 6px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,6 +38,11 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
+    }
+
+    .panel.drag-over {
+      border-color: rgba(255,255,255,0.34);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 18px 48px rgba(0,0,0,0.45);
     }
 
     .header {
@@ -126,6 +131,17 @@
       font-size: 11px;
     }
 
+    .drop-zone {
+      margin: 10px 12px 0;
+      padding: 10px;
+      border: 1px dashed rgba(255,255,255,0.18);
+      border-radius: var(--radius);
+      color: var(--text-secondary);
+      background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+      font-size: 12px;
+      text-align: center;
+    }
+
     .guide-row, .step-row {
       padding: 10px 12px;
       border-bottom: 1px solid var(--border);
@@ -199,7 +215,7 @@
   </style>
 </head>
 <body>
-  <div class="panel">
+  <div class="panel" id="panel">
     <div class="header">
       <div class="logo-dot"></div>
       <span class="header-label">Click Guide</span>
@@ -207,7 +223,7 @@
     <main id="app"></main>
     <div class="status" id="status"></div>
   </div>
-  <input id="importFile" type="file" accept="application/json,.json" class="hidden" />
+  <input id="importFile" type="file" accept="application/json,.json,.clickguide" class="hidden" />
   <script src="guideUtils.js"></script>
   <script src="popup.js"></script>
 </body>

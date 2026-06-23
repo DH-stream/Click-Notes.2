@@ -370,20 +370,23 @@
       if (compact) popup.className = "click-guide-compact";
       popup.innerHTML = compact
         ? `
-          <button class="click-guide-close" type="button" aria-label="Close">x</button>
+          <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
           <div class="click-guide-count"></div>
           <div class="click-guide-actions">
             <button type="button" data-action="prev">Previous</button>
+            <button type="button" data-action="close">Close guide</button>
             <button type="button" data-action="next">Next</button>
           </div>
         `
         : `
-          <button class="click-guide-close" type="button" aria-label="Close">x</button>
+          <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
+          <div class="click-guide-eyebrow">Click Guide</div>
           <h2></h2>
           <p></p>
           <div class="click-guide-count"></div>
           <div class="click-guide-actions">
             <button type="button" data-action="prev">Previous</button>
+            <button type="button" data-action="close">Close guide</button>
             <button type="button" data-action="next">Next</button>
           </div>
         `;
@@ -404,6 +407,7 @@
         if (event.target?.classList?.contains("click-guide-close")) stopPlayback();
         if (action === "prev") goToStep(activePlayback.stepIndex - 1);
         if (action === "next") goToStep(activePlayback.stepIndex + 1);
+        if (action === "close") stopPlayback();
       });
     }
     watchAdvanceMode(step);
