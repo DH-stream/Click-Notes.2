@@ -73,7 +73,7 @@
       step?.playback?.showInstructionText ?? step?.playback?.showPopup;
     const fallbackTagName = String(target.fallbackTagName || "").trim().toLowerCase();
     return {
-      id: step?.id || makeId("step"),
+      id: normalizeEntityId(step?.id, "step"),
       order: index + 1,
       title: textSnippet(step?.title, 140),
       body: textSnippet(step?.body, 2000),
@@ -172,6 +172,12 @@
     return ["manual", "urlMatch", "elementVisible"].includes(mode) ? mode : "manual";
   }
 
+  function normalizeEntityId(value, prefix) {
+    const id = String(value || "").trim();
+    if (/^[a-zA-Z0-9_-]{1,120}$/.test(id)) return id;
+    return makeId(prefix);
+  }
+
   function stepHasTargetOrAnchor(step) {
     const target = step?.target || {};
     const rect = target.rect || {};
@@ -221,7 +227,8 @@
       throw new Error("Import failed: guide needs at least one step");
     }
     const timestamp = nowIso();
-    const id = existingIds.includes(guide.id) ? makeId("guide") : guide.id || makeId("guide");
+    const guideId = normalizeEntityId(guide.id, "guide");
+    const id = existingIds.includes(guideId) ? makeId("guide") : guideId;
     const seenStepIds = new Set();
     return {
       id,

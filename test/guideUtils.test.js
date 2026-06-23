@@ -248,3 +248,24 @@ test("prepareImportedGuide limits imported display text", () => {
   assert.equal(imported.steps[0].title.length, 140);
   assert.equal(imported.steps[0].body.length, 2000);
 });
+
+test("prepareImportedGuide replaces unsafe imported ids", () => {
+  const imported = prepareImportedGuide(
+    {
+      id: "guide <script>",
+      title: "Unsafe ids",
+      startUrl: "https://example.com",
+      steps: [
+        {
+          id: "step <script>",
+          title: "Step",
+          target: { selector: "#target" },
+        },
+      ],
+    },
+    [],
+  );
+
+  assert.match(imported.id, /^guide-/);
+  assert.match(imported.steps[0].id, /^step-/);
+});
