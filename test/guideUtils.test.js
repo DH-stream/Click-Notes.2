@@ -225,3 +225,26 @@ test("normalizeStep limits imported selector fields", () => {
   assert.equal(normalized.target.id.length, 160);
   assert.equal(normalized.advance.value.length, 500);
 });
+
+test("prepareImportedGuide limits imported display text", () => {
+  const imported = prepareImportedGuide(
+    {
+      title: "Guide ".repeat(80),
+      description: "Description ".repeat(80),
+      startUrl: "https://example.com",
+      steps: [
+        {
+          title: "Title ".repeat(80),
+          body: "Body ".repeat(800),
+          target: { selector: "#target" },
+        },
+      ],
+    },
+    [],
+  );
+
+  assert.equal(imported.title.length, 140);
+  assert.equal(imported.description.length, 500);
+  assert.equal(imported.steps[0].title.length, 140);
+  assert.equal(imported.steps[0].body.length, 2000);
+});

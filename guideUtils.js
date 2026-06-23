@@ -75,8 +75,8 @@
     return {
       id: step?.id || makeId("step"),
       order: index + 1,
-      title: String(step?.title || "").trim(),
-      body: String(step?.body || "").trim(),
+      title: textSnippet(step?.title, 140),
+      body: textSnippet(step?.body, 2000),
       pageUrl: normalizeGuideUrl(step?.pageUrl || target.pageUrl || ""),
       target: {
         selector: textSnippet(target.selector, 500),
@@ -226,8 +226,8 @@
     return {
       id,
       schemaVersion: Number(guide.schemaVersion) || 1,
-      title: String(guide.title).trim(),
-      description: String(guide.description || ""),
+      title: textSnippet(guide.title, 140),
+      description: textSnippet(guide.description, 500),
       startUrl,
       createdAt: guide.createdAt || timestamp,
       updatedAt: timestamp,
