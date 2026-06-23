@@ -157,3 +157,33 @@ test("normalizeStep drops unsafe fallback tag names", () => {
 
   assert.equal(normalized.target.fallbackTagName, "");
 });
+
+test("normalizeStep sanitizes imported fallback metadata", () => {
+  const normalized = normalizeStep(
+    {
+      title: "Imported metadata",
+      target: {
+        selector: "#target",
+        fallbackText: ` ${"Long text ".repeat(40)} `,
+        fallbackAriaLabel: ` ${"Label ".repeat(40)} `,
+        fallbackRole: "button".repeat(40),
+        classList: ["safe-class", "bad class", "also_safe-2", "<script>"],
+        placeholder: ` ${"Placeholder ".repeat(40)} `,
+        name: ` ${"fieldName".repeat(40)} `,
+        type: ` ${"password".repeat(20)} `,
+        href: "javascript:alert(1)",
+      },
+    },
+    0,
+  );
+
+  assert.equal(normalized.target.fallbackText.length, 160);
+  assert.equal(normalized.target.fallbackAriaLabel.length, 160);
+  assert.equal(normalized.target.fallbackRole.length, 80);
+  assert.deepEqual(normalized.target.classList, ["safe-class", "also_safe-2"]);
+  assert.equal(normalized.target.placeholder.length, 160);
+  assert.equal(normalized.target.name.length, 120);
+  assert.equal(normalized.target.type.length, 80);
+  assert.equal(normalized.target.href, "");
+  assert.equal("value" in normalized.target, false);
+});

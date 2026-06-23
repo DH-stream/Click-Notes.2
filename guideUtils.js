@@ -82,15 +82,15 @@
         selector: target.selector || "",
         selectorConfidence: target.selectorConfidence || "weak",
         fallbackPath: target.fallbackPath || "",
-        fallbackText: String(target.fallbackText || ""),
-        fallbackAriaLabel: String(target.fallbackAriaLabel || ""),
-        fallbackRole: String(target.fallbackRole || ""),
+        fallbackText: textSnippet(target.fallbackText, 160),
+        fallbackAriaLabel: textSnippet(target.fallbackAriaLabel, 160),
+        fallbackRole: textSnippet(target.fallbackRole, 80),
         fallbackTagName: /^[a-z][a-z0-9-]*$/.test(fallbackTagName) ? fallbackTagName : "",
         id: String(target.id || ""),
-        classList: Array.isArray(target.classList) ? target.classList : [],
-        placeholder: String(target.placeholder || ""),
-        name: String(target.name || ""),
-        type: String(target.type || ""),
+        classList: normalizeClassList(target.classList),
+        placeholder: textSnippet(target.placeholder, 160),
+        name: textSnippet(target.name, 120),
+        type: textSnippet(target.type, 80),
         href: normalizeGuideUrl(target.href || ""),
         pageUrl: normalizeGuideUrl(target.pageUrl || step?.pageUrl || ""),
         anchorMode: target.anchorMode === "rect" ? "rect" : "element",
@@ -148,6 +148,18 @@
 
   function numberOrZero(value) {
     return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function textSnippet(value, max) {
+    return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
+  }
+
+  function normalizeClassList(classList) {
+    if (!Array.isArray(classList)) return [];
+    return classList
+      .map((item) => String(item || "").trim())
+      .filter((item) => /^[a-zA-Z0-9_-]{1,80}$/.test(item))
+      .slice(0, 12);
   }
 
   function stepHasTargetOrAnchor(step) {
