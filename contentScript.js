@@ -664,9 +664,9 @@
 
   function onMouseMove(event) {
     if (mode !== "builder-selecting-target") return;
-    const target = event.target;
-    if (!(target instanceof HTMLElement) || isOverlayElement(target)) return;
-    const resolved = getTargetElement(target);
+    const selection = resolveGuideTargetFromEvent(event);
+    if (!selection) return;
+    const resolved = selection.element;
     if (hoveredElement !== resolved) {
       clearHover();
       hoveredElement = resolved;
