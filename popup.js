@@ -1,20 +1,37 @@
-const recordBtn = document.getElementById("recordBtn");
-const stopBtn = document.getElementById("stopBtn");
-const copyBtn = document.getElementById("copyBtn");
-const clearBtn = document.getElementById("clearBtn");
-const notesList = document.getElementById("notesList");
-const statusDot = document.getElementById("statusDot");
-const headerLabel = document.getElementById("headerLabel");
+const app = document.getElementById("app");
+const statusEl = document.getElementById("status");
+const importFile = document.getElementById("importFile");
+const {
+  createGuide,
+  createStep,
+  normalizeGuideUrl,
+  normalizeStep,
+  prepareImportedGuide,
+} = window.ClickGuideUtils;
 
-function setRecordingUI(isRecording) {
-  recordBtn.style.display = isRecording ? "none" : "block";
-  stopBtn.style.display = isRecording ? "block" : "none";
-  if (statusDot) statusDot.classList.toggle("recording", isRecording);
-  if (headerLabel) headerLabel.textContent = isRecording ? "Recording…" : "Click Notes";
+let state = {
+  guides: [],
+  view: "list",
+  activeGuideId: "",
+  editingStepId: "",
+  pendingTarget: null,
+};
+
+function setStatus(message) {
+  statusEl.textContent = message || "";
 }
 
-function setCopyLabel(noteCount) {
-  copyBtn.textContent = noteCount > 0 ? `Copy ${noteCount}` : "Copy";
+function el(tag, props = {}, children = []) {
+  const node = document.createElement(tag);
+  Object.entries(props).forEach(([key, value]) => {
+    if (key === "className") node.className = value;
+    else if (key === "textContent") node.textContent = value;
+    else if (key.startsWith("on") && typeof value === "function")
+      node.addEventListener(key.slice(2).toLowerCase(), value);
+    else if (value !== undefined && value !== null) node.setAttribute(key, value);
+  });
+  children.forEach((child) => node.append(child));
+  return node;
 }
 
 async function getActiveTab() {
@@ -24,7 +41,7 @@ async function getActiveTab() {
 
 async function isContentScriptLoaded(tabId) {
   try {
-    const response = await chrome.tabs.sendMessage(tabId, { type: "CLICK_NOTES_PING" });
+    const response = await chrome.tabs.sendMessage(tabId, { type: "CLICK_GUIDE_PING" });
     return Boolean(response?.loaded);
   } catch {
     return false;
@@ -32,159 +49,377 @@ async function isContentScriptLoaded(tabId) {
 }
 
 async function ensureInjected(tabId) {
-  const alreadyLoaded = await isContentScriptLoaded(tabId);
-  if (alreadyLoaded) return;
+  if (await isContentScriptLoaded(tabId)) return;
   await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentStyle.css"] });
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["contentScript.js"] });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["guideUtils.js", "contentScript.js"] });
 }
 
-async function sendToActiveTab(type) {
+async function loadGuides() {
+  const { guides } = await chrome.storage.local.get({ guides: [] });
+  state.guides = Array.isArray(guides) ? guides : [];
+}
+
+async function saveGuides() {
+  await chrome.storage.local.set({ guides: state.guides });
+}
+
+function activeGuide() {
+  return state.guides.find((guide) => guide.id === state.activeGuideId);
+}
+
+function activeStep() {
+  const guide = activeGuide();
+  return guide?.steps.find((step) => step.id === state.editingStepId);
+}
+
+function updateGuide(guide) {
+  guide.updatedAt = new Date().toISOString();
+  guide.steps = guide.steps.map(normalizeStep);
+  state.guides = state.guides.map((item) => (item.id === guide.id ? guide : item));
+}
+
+function button(label, onClick, className = "") {
+  return el("button", { type: "button", className, textContent: label, onClick });
+}
+
+function render() {
+  app.innerHTML = "";
+  if (state.view === "editor") renderEditor();
+  else if (state.view === "step") renderStepEditor();
+  else renderList();
+}
+
+function renderList() {
+  const toolbar = el("div", { className: "toolbar" }, [
+    button("Create guide", createGuideFromTab, "primary"),
+    button("Import guide", () => importFile.click()),
+  ]);
+  app.append(toolbar);
+
+  if (!state.guides.length) {
+    app.append(el("div", { className: "list-empty", textContent: "No guides yet" }));
+    return;
+  }
+
+  app.append(el("div", { className: "section" }, [
+    el("h1", { textContent: "My guides" }),
+  ]));
+
+  state.guides.forEach((guide) => {
+    const row = el("div", { className: "guide-row" }, [
+      el("div", { className: "row-title", textContent: guide.title }),
+      el("div", { className: "muted", textContent: `${guide.steps.length} steps - ${guide.startUrl}` }),
+      el("div", { className: "row-actions" }, [
+        button("Play", () => playGuide(guide.id), "small primary"),
+        button("Edit", () => {
+          state.activeGuideId = guide.id;
+          state.view = "editor";
+          render();
+        }, "small"),
+        button("Export", () => exportGuide(guide.id), "small"),
+        button("Delete", () => deleteGuide(guide.id), "small danger"),
+      ]),
+    ]);
+    app.append(row);
+  });
+}
+
+function renderEditor() {
+  const guide = activeGuide();
+  if (!guide) {
+    state.view = "list";
+    render();
+    return;
+  }
+  app.append(el("div", { className: "toolbar" }, [
+    button("Back", () => {
+      state.view = "list";
+      render();
+    }, "ghost"),
+    button("Add step", () => selectStepTarget(guide.id), "primary"),
+    button("Play", () => playGuide(guide.id)),
+    button("Export", () => exportGuide(guide.id)),
+  ]));
+  app.append(el("div", { className: "section" }, [
+    el("h1", { textContent: guide.title }),
+    el("div", { className: "muted", textContent: guide.startUrl }),
+  ]));
+  if (!guide.steps.length) {
+    app.append(el("div", { className: "list-empty", textContent: "No steps yet" }));
+    return;
+  }
+  guide.steps.forEach((step, index) => {
+    app.append(el("div", { className: "step-row" }, [
+      el("div", { className: "row-title", textContent: `${index + 1}. ${step.title || "Untitled step"}` }),
+      el("div", { className: "muted", textContent: step.target?.selector || "No selector" }),
+      el("div", { className: "row-actions" }, [
+        button("Edit", () => {
+          state.editingStepId = step.id;
+          state.pendingTarget = null;
+          state.view = "step";
+          render();
+        }, "small"),
+        button("Retarget", () => selectStepTarget(guide.id, step.id), "small"),
+        button("Up", () => moveStep(guide.id, step.id, -1), "small"),
+        button("Down", () => moveStep(guide.id, step.id, 1), "small"),
+        button("Delete", () => deleteStep(guide.id, step.id), "small danger"),
+      ]),
+    ]));
+  });
+}
+
+function field(labelText, input) {
+  return el("div", {}, [
+    el("label", { textContent: labelText }),
+    input,
+  ]);
+}
+
+function checkbox(id, labelText, checked) {
+  const input = el("input", { id, type: "checkbox" });
+  input.checked = checked;
+  return el("label", { className: "check" }, [input, document.createTextNode(labelText)]);
+}
+
+function renderStepEditor() {
+  const guide = activeGuide();
+  const existing = activeStep();
+  const step = existing || createStep(state.pendingTarget);
+  const title = el("input", { id: "stepTitle", type: "text", placeholder: "Step title" });
+  title.value = step.title || "";
+  const body = el("textarea", { id: "stepBody", placeholder: "Instruction body" });
+  body.value = step.body || "";
+  const placement = el("select", { id: "popupPlacement" });
+  ["auto", "top", "right", "bottom", "left"].forEach((value) => {
+    const option = el("option", { value, textContent: value });
+    option.selected = (step.playback?.popupPlacement || "auto") === value;
+    placement.append(option);
+  });
+  const advanceMode = el("select", { id: "advanceMode" });
+  ["manual", "urlMatch", "elementVisible"].forEach((value) => {
+    const option = el("option", { value, textContent: value });
+    option.selected = (step.advance?.mode || "manual") === value;
+    advanceMode.append(option);
+  });
+  const advanceValue = el("input", { id: "advanceValue", type: "text", placeholder: "URL contains or selector" });
+  advanceValue.value = step.advance?.value || "";
+
+  const weakHint = step.target?.selectorConfidence === "weak"
+    ? el("div", {
+        className: "hint",
+        textContent: `Weak selector. For a more reliable guide, add data-guide-id="..." or data-note="..." to this element.`,
+      })
+    : document.createTextNode("");
+
+  app.append(el("div", { className: "toolbar" }, [
+    button("Back", () => {
+      state.view = "editor";
+      state.pendingTarget = null;
+      state.editingStepId = "";
+      render();
+    }, "ghost"),
+    button("Save step", () => saveStepFromForm(step), "primary"),
+  ]));
+  app.append(el("div", { className: "section" }, [
+    el("h1", { textContent: guide?.title || "Guide" }),
+    el("div", { className: "muted", textContent: step.target?.selector || "No target selected" }),
+    weakHint,
+    field("Title", title),
+    field("Body / instruction", body),
+    checkbox("showPopup", "Show popup", step.playback?.showPopup !== false),
+    checkbox("highlightTarget", "Highlight target", step.playback?.highlightTarget !== false),
+    checkbox("autoScroll", "Scroll automatically to element", step.playback?.autoScroll !== false),
+    checkbox("dimPage", "Dim rest of page", step.playback?.dimPage !== false),
+    field("Popup placement", placement),
+    field("Advance", advanceMode),
+    field("Advance value", advanceValue),
+    checkbox("allowManualFallback", "Allow manual fallback", step.advance?.allowManualFallback !== false),
+  ]));
+}
+
+async function createGuideFromTab() {
   const tab = await getActiveTab();
-  if (!tab?.id) throw new Error("No active tab found");
-  if (type === "CLICK_NOTES_START_CAPTURE") await ensureInjected(tab.id);
-  return chrome.tabs.sendMessage(tab.id, { type });
+  const title = prompt("Guide title", tab?.title || "Untitled guide");
+  if (title === null) return;
+  const guide = createGuide(title, tab?.url || "");
+  state.guides.unshift(guide);
+  state.activeGuideId = guide.id;
+  state.view = "editor";
+  await saveGuides();
+  setStatus("Guide created");
+  render();
 }
 
-function quoted(value) { return value ? `"${value}"` : "n/a"; }
-
-function isLowValueClass(className) {
-  return /^click-notes-/.test(className) || /^css-/.test(className) || /^r-/.test(className);
+async function deleteGuide(guideId) {
+  if (!confirm("Delete this guide?")) return;
+  state.guides = state.guides.filter((guide) => guide.id !== guideId);
+  await saveGuides();
+  setStatus("Guide deleted");
+  render();
 }
 
-function cleanClassList(classList = []) {
-  return classList.filter((cls) => !isLowValueClass(cls));
+async function selectStepTarget(guideId, stepId = "") {
+  const tab = await getActiveTab();
+  if (!tab?.id) return setStatus("No active tab");
+  await ensureInjected(tab.id);
+  await chrome.storage.local.set({ pendingGuideEdit: { guideId, stepId } });
+  await chrome.tabs.sendMessage(tab.id, { type: "CLICK_GUIDE_SELECT_STEP_TARGET" });
+  window.close();
 }
 
-function renderNotePreviews(notes) {
-  notesList.innerHTML = "";
-  notes.forEach((note, idx) => {
-    const row = document.createElement("div");
-    row.className = "note-row";
-    const text = (note.comment || "").trim();
-    row.innerHTML = `<span class="num">${idx + 1}</span><span class="text">${text}</span>`;
-    row.title = "Click to edit";
-    row.style.cursor = "pointer";
-    row.addEventListener("click", async () => {
-      try {
-        const tab = await getActiveTab();
-        if (!tab?.id) return;
-        await chrome.tabs.sendMessage(tab.id, { type: "CLICK_NOTES_EDIT_NOTE", noteIndex: idx });
-        window.close(); // close popup so user can see the edit modal on the page
-      } catch {}
-    });
-    notesList.appendChild(row);
+async function playGuide(guideId) {
+  const guide = state.guides.find((item) => item.id === guideId);
+  if (!guide) return;
+  let tab = await getActiveTab();
+  if (!tab?.id) return;
+  const firstPageUrl = guide.steps?.[0]?.pageUrl || guide.startUrl;
+  if (normalizeGuideUrl(tab.url || "") !== normalizeGuideUrl(firstPageUrl)) {
+    await chrome.tabs.update(tab.id, { url: firstPageUrl });
+    await waitForTabComplete(tab.id);
+    tab = await getActiveTab();
+  }
+  await ensureInjected(tab.id);
+  await chrome.tabs.sendMessage(tab.id, {
+    type: "CLICK_GUIDE_START_PLAYBACK",
+    guide,
+    stepIndex: 0,
+    tabId: tab.id,
+  });
+  window.close();
+}
+
+function waitForTabComplete(tabId) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }, 5000);
+    function listener(updatedTabId, changeInfo) {
+      if (updatedTabId !== tabId || changeInfo.status !== "complete") return;
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    }
+    chrome.tabs.onUpdated.addListener(listener);
   });
 }
 
-function formatImplementationClues(note) {
-  const clues = [];
-  if (note.text) clues.push(`- Search repo for visible text: ${quoted(note.text)}`);
-  if (note.ariaLabel) clues.push(`- Search repo for aria-label: ${quoted(note.ariaLabel)}`);
-  if (note.id) clues.push(`- Search repo for id: ${quoted(note.id)}`);
-  const meaningfulClasses = cleanClassList(note.classList || []);
-  if (meaningfulClasses.length) clues.push(`- Search repo for class names: ${meaningfulClasses.slice(0, 4).join(", ")}`);
-  if (note.selector) clues.push(`- Search repo for selector: ${quoted(note.selector)}`);
-  if (note.pathname) clues.push(`- Search route/page: ${note.pathname}`);
-  return clues.length ? clues : ["- No strong implementation clues found"];
+async function exportGuide(guideId) {
+  const guide = state.guides.find((item) => item.id === guideId);
+  if (!guide) return;
+  const blob = new Blob([JSON.stringify(guide, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${guide.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-click-guide.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  setStatus("Guide exported");
 }
 
-function formatNoteBlock(note, index) {
-  return [
-    `### Note ${index + 1}`,
-    "", "Target:",
-    `- Tag: ${note.tagName || "n/a"}`,
-    `- Selector: ${note.selector || "n/a"}`,
-    `- Fallback path: ${note.fallbackPath || "n/a"}`,
-    `- Text: ${note.text || "n/a"}`,
-    `- Role: ${note.role || "n/a"}`,
-    `- Aria label: ${note.ariaLabel || "n/a"}`,
-    `- Title attribute: ${note.titleAttr || "n/a"}`,
-    `- Name: ${note.nameAttr || "n/a"}`,
-    `- Type: ${note.typeAttr || "n/a"}`,
-    `- Placeholder: ${note.placeholder || "n/a"}`,
-    `- Href: ${note.href || "n/a"}`,
-    `- Src: ${note.src || "n/a"}`,
-    `- Id: ${note.id || "n/a"}`,
-    `- Class list: ${cleanClassList(note.classList || []).join(" ") || "n/a"}`,
-    `- Position: x=${note.rect?.x ?? "?"} y=${note.rect?.y ?? "?"} w=${note.rect?.width ?? "?"} h=${note.rect?.height ?? "?"}`,
-    "", "Nearby context:",
-    `- Parent text: ${note.parentText || "n/a"}`,
-    `- Section text: ${note.sectionText || "n/a"}`,
-    `- Route: ${note.pathname || "n/a"}`,
-    "", "Visual clues:",
-    `- Color: ${note.visual?.color || "n/a"}`,
-    `- Background: ${note.visual?.backgroundColor || "n/a"}`,
-    `- Font size: ${note.visual?.fontSize || "n/a"}`,
-    `- Font weight: ${note.visual?.fontWeight || "n/a"}`,
-    `- Border radius: ${note.visual?.borderRadius || "n/a"}`,
-    `- Box shadow: ${note.visual?.boxShadow || "n/a"}`,
-    "", "Implementation clues:", ...formatImplementationClues(note),
-    "", "Comment:", note.comment, ""
-  ].join("\n");
-}
-
-function buildMarkdown(notes) {
-  const byPage = notes.reduce((acc, note) => ((acc[note.url || "unknown"] ||= []).push(note), acc), {});
-  const lines = ["# Visual build notes", "", `Generated: ${new Date().toISOString()}`, ""];
-  Object.entries(byPage).forEach(([url, pageNotes]) => {
-    lines.push(`## Page: ${url}`, "", `Title: ${pageNotes[0].title || "Untitled"}`, `Viewport: ${pageNotes[0].viewport?.width || "?"}x${pageNotes[0].viewport?.height || "?"}`, "");
-    pageNotes.forEach((note, idx) => lines.push(formatNoteBlock(note, idx)));
-  });
-  return lines.join("\n").trim();
-}
-
-async function flashButton(button, text, restoreText) {
-  button.textContent = text;
-  await new Promise((r) => setTimeout(r, 900));
-  button.textContent = restoreText;
-}
-
-async function refresh() {
-  const { notes } = await chrome.storage.local.get({ notes: [] });
-  setCopyLabel(notes.length);
-  renderNotePreviews(notes);
+async function handleImport(file) {
+  if (!file) return;
   try {
-    const state = await sendToActiveTab("CLICK_NOTES_GET_STATE");
-    setRecordingUI(Boolean(state?.captureEnabled));
+    const text = await file.text();
+    const imported = prepareImportedGuide(text, state.guides.map((guide) => guide.id));
+    state.guides.unshift(imported);
+    await saveGuides();
+    setStatus("Guide imported");
+    render();
   } catch {
-    setRecordingUI(false);
+    setStatus("Import failed");
+  } finally {
+    importFile.value = "";
   }
 }
 
-recordBtn.addEventListener("click", async () => {
-  try {
-    await sendToActiveTab("CLICK_NOTES_START_CAPTURE");
-    await refresh();
-  } catch {}
-});
+async function moveStep(guideId, stepId, direction) {
+  const guide = state.guides.find((item) => item.id === guideId);
+  if (!guide) return;
+  const index = guide.steps.findIndex((step) => step.id === stepId);
+  const next = index + direction;
+  if (index < 0 || next < 0 || next >= guide.steps.length) return;
+  const [step] = guide.steps.splice(index, 1);
+  guide.steps.splice(next, 0, step);
+  updateGuide(guide);
+  await saveGuides();
+  render();
+}
 
-stopBtn.addEventListener("click", async () => {
-  try {
-    await sendToActiveTab("CLICK_NOTES_STOP_CAPTURE");
-    await refresh();
-  } catch {}
-});
+async function deleteStep(guideId, stepId) {
+  const guide = state.guides.find((item) => item.id === guideId);
+  if (!guide) return;
+  guide.steps = guide.steps.filter((step) => step.id !== stepId);
+  updateGuide(guide);
+  await saveGuides();
+  render();
+}
 
-copyBtn.addEventListener("click", async () => {
-  const { notes } = await chrome.storage.local.get({ notes: [] });
-  if (!notes.length) return;
-  try {
-    await navigator.clipboard.writeText(buildMarkdown(notes));
-    await flashButton(copyBtn, "Copied", notes.length > 0 ? `Copy ${notes.length}` : "Copy");
-  } catch {}
-});
+async function saveStepFromForm(step) {
+  const guide = activeGuide();
+  if (!guide) return;
+  const saved = {
+    ...step,
+    title: document.getElementById("stepTitle").value.trim() || "Untitled step",
+    body: document.getElementById("stepBody").value.trim(),
+    playback: {
+      showPopup: document.getElementById("showPopup").checked,
+      highlightTarget: document.getElementById("highlightTarget").checked,
+      dimPage: document.getElementById("dimPage").checked,
+      autoScroll: document.getElementById("autoScroll").checked,
+      popupPlacement: document.getElementById("popupPlacement").value,
+    },
+    advance: {
+      mode: document.getElementById("advanceMode").value,
+      value: document.getElementById("advanceValue").value.trim(),
+      allowManualFallback: document.getElementById("allowManualFallback").checked,
+    },
+  };
+  const existingIndex = guide.steps.findIndex((item) => item.id === saved.id);
+  if (existingIndex >= 0) guide.steps[existingIndex] = saved;
+  else guide.steps.push(saved);
+  updateGuide(guide);
+  await saveGuides();
+  state.view = "editor";
+  state.pendingTarget = null;
+  state.editingStepId = "";
+  setStatus("Step saved");
+  render();
+}
 
-clearBtn.addEventListener("click", async () => {
-  await chrome.storage.local.set({ notes: [] });
-  try {
-    const tab = await getActiveTab();
-    if (tab?.id) {
-      await ensureInjected(tab.id);
-      await chrome.tabs.sendMessage(tab.id, { type: "CLICK_NOTES_CLEAR_PINS" });
-    }
-  } catch {}
-  await flashButton(clearBtn, "Cleared", "Clear");
-  await refresh();
-});
+async function consumePendingSelection() {
+  const { pendingGuideEdit, selectedGuideTarget } = await chrome.storage.local.get({
+    pendingGuideEdit: null,
+    selectedGuideTarget: null,
+  });
+  if (!pendingGuideEdit || !selectedGuideTarget) return;
+  const guide = state.guides.find((item) => item.id === pendingGuideEdit.guideId);
+  if (!guide) return;
+  await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
+  state.activeGuideId = guide.id;
+  const existing = guide.steps.find((step) => step.id === pendingGuideEdit.stepId);
+  if (existing) {
+    existing.target = selectedGuideTarget;
+    existing.pageUrl = selectedGuideTarget.pageUrl || existing.pageUrl;
+    state.editingStepId = existing.id;
+    updateGuide(guide);
+    await saveGuides();
+  } else {
+    const step = createStep(selectedGuideTarget);
+    state.pendingTarget = step.target;
+    state.editingStepId = step.id;
+  }
+  state.view = "step";
+}
 
-refresh();
+importFile.addEventListener("change", () => handleImport(importFile.files?.[0]));
+
+(async function init() {
+  try {
+    await loadGuides();
+    await consumePendingSelection();
+    render();
+  } catch {
+    setStatus("Could not load guides");
+  }
+})();

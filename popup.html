@@ -3,33 +3,28 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Click Notes</title>
+  <title>Click Guide</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600&display=swap');
-
     :root {
       color-scheme: dark;
       --bg-base: #0f0f0f;
       --bg-surface: #141414;
       --bg-raised: #1a1a1a;
-      --bg-hover: #1f1f1f;
-      --border: rgba(255,255,255,0.07);
-      --border-mid: rgba(255,255,255,0.11);
+      --bg-hover: #202020;
+      --border: rgba(255,255,255,0.08);
       --border-strong: rgba(255,255,255,0.16);
       --text-primary: #f2f2f2;
-      --text-secondary: #8a8a8a;
-      --text-muted: #555;
-      --accent: #e8e8e8;
-      --accent-stop: rgba(220, 50, 50, 0.18);
-      --accent-stop-text: #f87171;
+      --text-secondary: #9a9a9a;
+      --text-muted: #666;
+      --danger: #f87171;
+      --warn: #facc15;
       --radius: 4px;
-      --radius-sm: 2px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 268px;
+      width: 318px;
       background: var(--bg-base);
       color: var(--text-primary);
       font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
@@ -45,11 +40,10 @@
       overflow: hidden;
     }
 
-    /* ── Header strip ── */
     .header {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 8px;
       padding: 10px 12px 9px;
       border-bottom: 1px solid var(--border);
     }
@@ -60,17 +54,6 @@
       border-radius: 50%;
       background: var(--text-muted);
       flex-shrink: 0;
-      transition: background 200ms;
-    }
-    .logo-dot.recording {
-      background: #ef4444;
-      box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
-      animation: pulse-dot 1.6s ease-in-out infinite;
-    }
-
-    @keyframes pulse-dot {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
     }
 
     .header-label {
@@ -82,132 +65,150 @@
       color: var(--text-secondary);
     }
 
-    /* ── Controls ── */
-    .controls {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1px;
-      background: var(--border);
+    .section {
+      padding: 11px 12px;
       border-bottom: 1px solid var(--border);
     }
 
-    .controls button {
-      appearance: none;
-      border: none;
-      background: var(--bg-surface);
-      color: var(--text-secondary);
-      font-family: 'Geist', sans-serif;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.02em;
-      padding: 9px 10px;
-      cursor: pointer;
-      transition: background 100ms, color 100ms;
-      text-align: center;
+    .section:last-child { border-bottom: none; }
+
+    .toolbar, .actions, .row-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
     }
 
-    .controls button:hover {
-      background: var(--bg-hover);
+    .toolbar { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .actions { justify-content: flex-end; margin-top: 10px; }
+    .row-actions { flex-wrap: wrap; margin-top: 7px; }
+
+    button, select, input, textarea {
+      font: inherit;
       color: var(--text-primary);
     }
 
-    .controls button:active {
-      background: #222;
-    }
-
-    /* Record button: prominent */
-    #recordBtn {
-      color: var(--text-primary) !important;
-      background: var(--bg-raised) !important;
-      font-weight: 600 !important;
-    }
-    #recordBtn:hover {
-      background: #202020 !important;
-    }
-
-    /* Stop button */
-    #stopBtn {
-      display: none;
-      color: var(--accent-stop-text) !important;
-      background: var(--bg-raised) !important;
-      font-weight: 600 !important;
-    }
-    #stopBtn:hover {
-      background: rgba(220, 50, 50, 0.12) !important;
-    }
-
-    /* Copy button */
-    #copyBtn {
-      color: var(--text-primary) !important;
-    }
-
-    /* ── Notes area ── */
-    #notesList {
-      display: flex;
-      flex-direction: column;
-    }
-
-    #notesList:empty::after {
-      content: 'No notes yet';
-      display: block;
-      padding: 16px 12px;
-      font-size: 11px;
-      color: var(--text-muted);
-      font-family: 'Geist Mono', monospace;
-    }
-
-    .note-row {
-      display: grid;
-      grid-template-columns: 28px 1fr;
-      align-items: start;
-      gap: 0;
-      padding: 9px 12px 9px 0;
-      border-bottom: 1px solid var(--border);
-      min-height: 36px;
-    }
-
-    .note-row:last-child {
-      border-bottom: none;
-    }
-
-    .num {
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
-      padding-top: 1px;
-      font-family: 'Geist Mono', monospace;
-      font-size: 10px;
-      font-weight: 600;
-      color: var(--text-muted);
-      letter-spacing: 0.04em;
-      flex-shrink: 0;
-    }
-
-    .text {
+    button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--bg-raised);
+      border-radius: var(--radius);
+      padding: 6px 9px;
       font-size: 12px;
-      color: var(--text-secondary);
-      line-height: 1.5;
-      word-break: break-word;
-      white-space: pre-wrap;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 100ms, border-color 100ms;
     }
+
+    button:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+    button.primary { background: #f2f2f2; color: #0f0f0f; border-color: transparent; font-weight: 600; }
+    button.danger { color: var(--danger); }
+    button.ghost { background: transparent; color: var(--text-secondary); }
+    button.small { padding: 4px 7px; font-size: 11px; }
+    button:disabled { cursor: default; opacity: 0.45; }
+
+    h1, h2 {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .muted {
+      color: var(--text-muted);
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px;
+      word-break: break-word;
+    }
+
+    .list-empty {
+      padding: 16px 12px;
+      color: var(--text-muted);
+      font-family: 'Geist Mono', monospace;
+      font-size: 11px;
+    }
+
+    .guide-row, .step-row {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .guide-row:last-child, .step-row:last-child { border-bottom: none; }
+
+    .row-title {
+      font-weight: 600;
+      word-break: break-word;
+    }
+
+    label {
+      display: block;
+      color: var(--text-secondary);
+      font-size: 11px;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+
+    input[type="text"], textarea, select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #1a1a1a;
+      color: var(--text-primary);
+      padding: 7px 8px;
+      outline: none;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--border-strong);
+    }
+
+    .check {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+      margin: 7px 0 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .check input { width: auto; }
+
+    .hint {
+      margin-top: 8px;
+      padding: 7px 8px;
+      border: 1px solid rgba(250, 204, 21, 0.2);
+      color: #d4d4d4;
+      background: rgba(250, 204, 21, 0.07);
+      border-radius: var(--radius);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .status {
+      min-height: 24px;
+      padding: 6px 12px 10px;
+      color: var(--text-muted);
+      font-family: 'Geist Mono', monospace;
+      font-size: 10.5px;
+    }
+
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
   <div class="panel">
     <div class="header">
-      <div class="logo-dot" id="statusDot"></div>
-      <span class="header-label" id="headerLabel">Click Notes</span>
+      <div class="logo-dot"></div>
+      <span class="header-label">Click Guide</span>
     </div>
-
-    <div class="controls">
-      <button id="recordBtn">Record</button>
-      <button id="stopBtn">Stop</button>
-      <button id="copyBtn">Copy</button>
-      <button id="clearBtn">Clear</button>
-    </div>
-
-    <div id="notesList"></div>
+    <main id="app"></main>
+    <div class="status" id="status"></div>
   </div>
+  <input id="importFile" type="file" accept="application/json,.json" class="hidden" />
+  <script src="guideUtils.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,103 +1,130 @@
-.click-notes-highlight {
-  outline: 1.5px solid rgba(255, 255, 255, 0.45) !important;
+.click-guide-hover-highlight {
+  outline: 1.5px solid rgba(255, 255, 255, 0.58) !important;
   outline-offset: 2px !important;
   cursor: crosshair !important;
 }
 
-#click-notes-modal {
+#click-guide-overlay-layer {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 0;
+  height: 0;
+  z-index: 2147483646;
+  pointer-events: none;
+}
+
+#click-guide-dim-layer {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.44);
+  pointer-events: none;
+}
+
+.click-guide-target-highlight {
+  position: absolute;
+  border: 2px solid rgba(255, 255, 255, 0.86);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 0 0 4px rgba(0, 0, 0, 0.38),
+    0 8px 30px rgba(0, 0, 0, 0.42);
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+#click-guide-popup {
   position: fixed;
   z-index: 2147483647;
-  width: 292px;
+  width: min(330px, calc(100vw - 24px));
   background: #111111;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), 0 1px 0 rgba(255,255,255,0.04) inset;
-  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  box-shadow: 0 12px 44px rgba(0, 0, 0, 0.62), 0 1px 0 rgba(255,255,255,0.04) inset;
+  padding: 13px;
   font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   color: #f2f2f2;
+  pointer-events: auto;
 }
 
-#click-notes-modal .target-summary {
-  font-size: 11px;
-  color: #666;
-  margin-bottom: 10px;
-  line-height: 1.4;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
-  letter-spacing: 0.01em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  padding-bottom: 9px;
+#click-guide-popup h2 {
+  margin: 0 22px 7px 0;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 650;
+  color: #f2f2f2;
 }
 
-#click-notes-modal textarea {
-  width: 100%;
-  min-height: 88px;
-  box-sizing: border-box;
-  padding: 9px 10px;
-  font-size: 13px;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #1a1a1a;
-  color: #e8e8e8;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 4px;
-  resize: vertical;
-  outline: none;
-  transition: border-color 120ms;
+#click-guide-popup p {
+  margin: 0;
+  color: #c9c9c9;
   line-height: 1.5;
-  caret-color: #e8e8e8;
+  white-space: pre-wrap;
 }
 
-#click-notes-modal textarea::placeholder {
-  color: #444;
+#click-guide-popup.click-guide-compact {
+  width: auto;
+  min-width: 224px;
 }
 
-#click-notes-modal textarea:focus {
-  border-color: rgba(255, 255, 255, 0.22);
+.click-guide-count {
+  margin-top: 12px;
+  color: #777;
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.02em;
 }
 
-#click-notes-modal .actions {
-  margin-top: 10px;
+.click-guide-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 7px;
+  margin-top: 12px;
 }
 
-#click-notes-modal button {
+#click-guide-popup button {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
-  padding: 6px 13px;
+  padding: 6px 11px;
   font-size: 12px;
   font-weight: 500;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   cursor: pointer;
   transition: background 100ms, border-color 100ms, color 100ms;
-  letter-spacing: 0.01em;
-}
-
-#click-notes-cancel {
   background: #1a1a1a;
-  color: #888;
-  border-color: rgba(255, 255, 255, 0.08);
+  color: #e8e8e8;
 }
 
-#click-notes-cancel:hover {
-  background: #202020;
-  color: #bbb;
-  border-color: rgba(255, 255, 255, 0.14);
+#click-guide-popup button:hover {
+  background: #222;
+  border-color: rgba(255, 255, 255, 0.17);
 }
 
-#click-notes-save {
+#click-guide-popup button:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+#click-guide-popup [data-action="next"] {
   background: #f2f2f2;
   color: #0f0f0f;
   border-color: transparent;
-  font-weight: 600;
+  font-weight: 650;
 }
 
-#click-notes-save:hover {
-  background: #ffffff;
+.click-guide-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0 !important;
+  line-height: 20px;
+  color: #888 !important;
+  background: transparent !important;
 }
 
-#click-notes-toast {
+#click-guide-selection-toast {
   position: fixed;
   right: 12px;
   bottom: 12px;
@@ -109,113 +136,7 @@
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.04em;
-  padding: 5px 11px;
+  padding: 6px 11px;
   border-radius: 4px;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 140ms ease, transform 140ms ease;
   pointer-events: none;
-}
-
-#click-notes-toast.visible {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.click-notes-selected {
-  outline: 1.5px solid rgba(255, 255, 255, 0.6) !important;
-  outline-offset: 2px !important;
-}
-
-#click-notes-overlay-layer {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 0;
-  height: 0;
-  z-index: 2147483646;
-  pointer-events: none;
-}
-
-.click-notes-pin {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border-radius: 4px;
-  background: #f2f2f2;
-  color: #0f0f0f;
-  font-size: 11px;
-  font-weight: 700;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
-  line-height: 22px;
-  text-align: center;
-  pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-}
-
-.click-notes-target-overlay {
-  position: absolute;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 4px;
-  box-sizing: border-box;
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.click-notes-target-badge {
-  position: absolute;
-  top: -9px;
-  left: -9px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: #f2f2f2;
-  color: #0f0f0f;
-  font-size: 10px;
-  font-weight: 700;
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
-  line-height: 18px;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
-}
-
-.cn-hint {
-  font-size: 11px;
-  color: #888;
-  background: #1a1a1a;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 4px;
-  padding: 6px 8px;
-  margin-bottom: 9px;
-  line-height: 1.5;
-}
-
-.cn-hint code {
-  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
-  color: #c8c8c8;
-  font-size: 10.5px;
-}
-
-#click-notes-delete {
-  background: transparent;
-  color: #666;
-  border-color: rgba(255, 255, 255, 0.06);
-  margin-right: auto;
-}
-
-#click-notes-delete:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #f87171;
-  border-color: rgba(239, 68, 68, 0.2);
-}
-
-.click-notes-pin-clickable {
-  cursor: pointer !important;
-  pointer-events: all !important;
-  transition: transform 100ms, background 100ms;
-}
-
-.click-notes-pin-clickable:hover {
-  background: #ffffff;
-  transform: scale(1.15);
 }

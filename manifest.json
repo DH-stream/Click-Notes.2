@@ -1,21 +1,23 @@
 {
   "manifest_version": 3,
-  "name": "Click Notes",
-  "description": "Capture quick visual UI notes on web pages with low-friction click-to-comment flow.",
+  "name": "Click Guide",
+  "description": "Create local step-by-step visual guides on top of real websites.",
   "version": "0.1.0",
   "permissions": [
     "activeTab",
     "scripting",
-    "storage",
-    "clipboardWrite"
+    "storage"
   ],
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
-    "default_title": "Click Notes",
+    "default_title": "Click Guide",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

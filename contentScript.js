@@ -1,13 +1,25 @@
 (() => {
-  if (window.__CLICK_NOTES_LOADED__) return;
-  window.__CLICK_NOTES_LOADED__ = true;
+  if (window.__CLICK_GUIDE_LOADED__) return;
+  window.__CLICK_GUIDE_LOADED__ = true;
 
-  let captureEnabled = false;
+  const utils = window.ClickGuideUtils || {};
+  const normalizeGuideUrl =
+    utils.normalizeGuideUrl ||
+    ((value) => {
+      try {
+        const url = new URL(value);
+        return `${url.origin}${url.pathname}`;
+      } catch {
+        return String(value || "").split("#")[0].split("?")[0];
+      }
+    });
+
+  let mode = "idle";
   let hoveredElement = null;
-  let selectedElement = null;
-  let modalOpen = false;
-  let pinLayer = null;
-  let overlaySyncRaf = null;
+  let overlayLayer = null;
+  let activePlayback = null;
+  let repositionRaf = null;
+  let urlWatchTimer = null;
 
   function safeStorage(fn) {
     try {
@@ -28,23 +40,32 @@
 
   function isLikelyGeneratedClassName(className) {
     return (
+      /^click-guide-/.test(className) ||
       /^click-notes-/.test(className) ||
       /^css-/.test(className) ||
-      /^r-/.test(className)
+      /^r-/.test(className) ||
+      /^sc-/.test(className) ||
+      /^jsx-/.test(className)
     );
   }
 
   function getStableClass(element) {
-    const classes = Array.from(element.classList || []);
+    const utilityPrefix =
+      /^(mt|mb|ml|mr|mx|my|pt|pb|pl|pr|px|py|text|font|flex|grid|gap|bg|border|rounded|shadow|w-|h-|p-|m-|items|justify|tracking|leading|overflow|z-|top|left|right|bottom|sr-|col-|row-)/;
     return (
-      classes.find(
+      Array.from(element.classList || []).find(
         (cls) =>
           cls.length >= 3 &&
           /^[a-zA-Z0-9_-]+$/.test(cls) &&
           !/^\d/.test(cls) &&
+          !utilityPrefix.test(cls) &&
           !isLikelyGeneratedClassName(cls),
       ) || ""
     );
+  }
+
+  function getTextSnippet(value, max = 160) {
+    return (value || "").replace(/\s+/g, " ").trim().slice(0, max);
   }
 
   function buildFallbackPath(element) {
@@ -63,7 +84,7 @@
         break;
       }
       const sameTag = Array.from(parent.children).filter(
-        (n) => n.tagName === current.tagName,
+        (node) => node.tagName === current.tagName,
       );
       const index = Math.max(1, sameTag.indexOf(current) + 1);
       segments.unshift(`${tag}:nth-of-type(${index})`);
@@ -73,13 +94,33 @@
     return segments.join(" > ");
   }
 
+  function textSelectorFor(element) {
+    const role = element.getAttribute("role");
+    const text = getTextSnippet(element.innerText || element.textContent || "", 64);
+    if (!role || !text) return "";
+    const roleMatches = Array.from(document.querySelectorAll(`[role="${escapeCssValue(role)}"]`));
+    if (roleMatches.length === 1) return `[role="${escapeCssValue(role)}"]`;
+    return "";
+  }
+
   function getElementSelector(element) {
-    const dataPriority = ["note", "component", "testid", "cy"];
-    for (const key of dataPriority) {
-      const value = element.dataset?.[key];
-      if (value) return `[data-${key}="${escapeCssValue(value)}"]`;
+    const dataPriority = [
+      ["guideId", "data-guide-id"],
+      ["note", "data-note"],
+      ["component", "data-component"],
+      ["testid", "data-testid"],
+      ["cy", "data-cy"],
+    ];
+    for (const [datasetKey, attrName] of dataPriority) {
+      const value = element.dataset?.[datasetKey];
+      if (value) return `[${attrName}="${escapeCssValue(value)}"]`;
     }
-    if (element.id) return `#${escapeCssValue(element.id)}`;
+    if (element.id && !/^\d/.test(element.id) && !isLikelyGeneratedClassName(element.id))
+      return `#${escapeCssValue(element.id)}`;
+    const ariaLabel = element.getAttribute("aria-label");
+    if (ariaLabel) return `[aria-label="${escapeCssValue(ariaLabel)}"]`;
+    const roleTextSelector = textSelectorFor(element);
+    if (roleTextSelector) return roleTextSelector;
     const stableClass = getStableClass(element);
     if (stableClass)
       return `${element.tagName.toLowerCase()}.${escapeCssValue(stableClass)}`;
@@ -88,230 +129,55 @@
 
   function getSelectorConfidence(element, selector) {
     if (
+      element.dataset?.guideId ||
       element.dataset?.note ||
       element.dataset?.component ||
       element.dataset?.testid ||
       element.dataset?.cy
     )
       return "strong";
-    if (element.id) return "strong";
-    if (selector.startsWith("button.") || selector.startsWith("a.")) {
-      const cls = selector.split(".")[1];
-      if (
-        cls &&
-        !/^(mt|mb|ml|mr|mx|my|pt|pb|pl|pr|px|py|text|font|flex|grid|gap|bg|border|rounded|shadow|w-|h-|p-|m-|items|justify|tracking|leading|overflow|z-|top|left|right|bottom|sr-)/.test(
-          cls,
-        )
-      )
-        return "strong";
-    }
-    return "weak";
-  }
-
-  function suggestDataNote(element) {
-    const tag = element.tagName.toLowerCase();
-    const text = (element.innerText || element.getAttribute("aria-label") || "")
-      .replace(/\s+/g, "-")
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "")
-      .slice(0, 32)
-      .replace(/-+$/, "");
-    const base = text || tag;
-    return `data-note="${base}"`;
+    if (selector.startsWith("#") || selector.startsWith("[aria-label="))
+      return "medium";
+    if (selector.includes(":nth-of-type")) return "weak";
+    return "medium";
   }
 
   function getTargetElement(element) {
     const clickable = element.closest(
-      'button, a, [role="button"], input, label, textarea, select',
+      'button, a, [role="button"], input, label, textarea, select, [role="menuitem"], [role="tab"], [role="link"]',
     );
     return clickable || element;
   }
 
-  function getTextSnippet(value, max = 180) {
-    return (value || "").replace(/\s+/g, " ").trim().slice(0, max);
+  function isOverlayElement(element) {
+    return Boolean(
+      element.closest("#click-guide-overlay-layer") ||
+        element.closest("#click-guide-selection-toast"),
+    );
   }
 
-  function getContextText(element, selector) {
-    const parent = element.parentElement;
-    const section = element.closest(selector);
-    return getTextSnippet(section?.innerText || parent?.innerText || "", 220);
-  }
-
-  function getPageKey(url) {
-    try {
-      return new URL(url).origin + new URL(url).pathname;
-    } catch {
-      return url || "";
-    }
-  }
-
-  function ensurePinLayer() {
-    if (pinLayer && document.body.contains(pinLayer)) return pinLayer;
-    pinLayer = document.createElement("div");
-    pinLayer.id = "click-notes-overlay-layer";
-    document.body.appendChild(pinLayer);
-    return pinLayer;
-  }
-
-  function resolveNoteRect(note) {
-    const targetId = note.targetId || "";
-    if (targetId) {
-      const target = document.querySelector(
-        `[data-click-notes-target-id="${escapeCssValue(targetId)}"]`,
-      );
-      if (target instanceof HTMLElement) {
-        const rect = target.getBoundingClientRect();
-        return {
-          x: Math.round(rect.x + window.scrollX),
-          y: Math.round(rect.y + window.scrollY),
-          width: Math.round(rect.width),
-          height: Math.round(rect.height),
-        };
-      }
-    }
-    if (!note.rect) return null;
-    return {
-      x:
-        typeof note.rect.documentX === "number"
-          ? note.rect.documentX
-          : Math.round((note.rect.x || 0) + window.scrollX),
-      y:
-        typeof note.rect.documentY === "number"
-          ? note.rect.documentY
-          : Math.round((note.rect.y || 0) + window.scrollY),
-      width: Math.round(note.rect.width || 0),
-      height: Math.round(note.rect.height || 0),
-    };
-  }
-
-  async function renderPinsForCurrentPage() {
-    if (!chrome?.runtime?.id) return;
-    const layer = ensurePinLayer();
-    layer.innerHTML = "";
-    const { notes } = await chrome.storage.local.get({ notes: [] });
-    const pageKey = getPageKey(window.location.href);
-    let pinNumber = 0;
-    notes.forEach((note, noteIndex) => {
-      if (getPageKey(note.url) !== pageKey) return;
-      const rect = resolveNoteRect(note);
-      if (!rect) return;
-      pinNumber += 1;
-
-      const overlay = document.createElement("div");
-      overlay.className = "click-notes-target-overlay";
-      overlay.style.left = `${rect.x}px`;
-      overlay.style.top = `${rect.y}px`;
-      overlay.style.width = `${Math.max(8, rect.width)}px`;
-      overlay.style.height = `${Math.max(8, rect.height)}px`;
-
-      const badge = document.createElement("div");
-      badge.className = "click-notes-target-badge";
-      badge.textContent = String(pinNumber);
-      overlay.appendChild(badge);
-
-      const pin = document.createElement("div");
-      pin.className = "click-notes-pin click-notes-pin-clickable";
-      pin.textContent = String(pinNumber);
-      pin.style.left = `${Math.max(8, rect.x - 10)}px`;
-      pin.style.top = `${Math.max(8, rect.y - 10)}px`;
-      pin.title = note.comment || "";
-      pin.addEventListener("click", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        if (modalOpen) return;
-        const pinRect = pin.getBoundingClientRect();
-        openEditModal(noteIndex, pinRect.right + 8, pinRect.top);
-      });
-
-      layer.appendChild(overlay);
-      layer.appendChild(pin);
-    });
-  }
-
-  function scheduleOverlaySync() {
-    if (overlaySyncRaf) return;
-    overlaySyncRaf = requestAnimationFrame(() => {
-      overlaySyncRaf = null;
-      if (chrome?.runtime?.id) renderPinsForCurrentPage();
-    });
-  }
-
-  function clearHighlight() {
-    if (hoveredElement)
-      hoveredElement.classList.remove("click-notes-highlight");
-    hoveredElement = null;
-  }
-
-  function clearSelected() {
-    selectedElement = null;
-  }
-
-  function showToast(message) {
-    const existing = document.getElementById("click-notes-toast");
-    if (existing) existing.remove();
-    const toast = document.createElement("div");
-    toast.id = "click-notes-toast";
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.classList.add("visible"), 10);
-    setTimeout(() => {
-      toast.classList.remove("visible");
-      setTimeout(() => toast.remove(), 180);
-    }, 1200);
-  }
-
-  function onMouseMove(event) {
-    if (!captureEnabled || modalOpen) return;
-    const target = event.target;
-    if (
-      !(target instanceof HTMLElement) ||
-      target.closest("#click-notes-modal")
-    )
-      return;
-    const resolvedTarget = getTargetElement(target);
-    if (hoveredElement !== resolvedTarget) {
-      clearHighlight();
-      hoveredElement = resolvedTarget;
-      hoveredElement.classList.add("click-notes-highlight");
-    }
-  }
-
-  function clampToViewport(left, top, width, height) {
-    const margin = 12;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    return {
-      left: Math.max(margin, Math.min(left, vw - width - margin)),
-      top: Math.max(margin, Math.min(top, vh - height - margin)),
-    };
-  }
-
-  function buildNotePayload(element, comment) {
+  function captureTarget(element) {
     const rect = element.getBoundingClientRect();
-    const style = window.getComputedStyle(element);
+    const selector = getElementSelector(element);
+    const tagName = element.tagName.toLowerCase();
+    const type = element.getAttribute("type") || "";
     return {
-      createdAt: new Date().toISOString(),
-      url: window.location.href,
-      pathname: window.location.pathname,
-      title: document.title,
-      viewport: { width: window.innerWidth, height: window.innerHeight },
-      tagName: element.tagName.toLowerCase(),
-      text: getTextSnippet(element.innerText || element.textContent || ""),
-      ariaLabel: element.getAttribute("aria-label") || "",
-      titleAttr: element.getAttribute("title") || "",
-      placeholder: element.getAttribute("placeholder") || "",
-      role: element.getAttribute("role") || "",
-      nameAttr: element.getAttribute("name") || "",
-      typeAttr: element.getAttribute("type") || "",
-      href: element.getAttribute("href") || "",
-      src: element.getAttribute("src") || "",
+      selector,
+      selectorConfidence: getSelectorConfidence(element, selector),
+      fallbackText: getTextSnippet(element.innerText || element.textContent || ""),
+      fallbackAriaLabel: element.getAttribute("aria-label") || "",
+      fallbackRole: element.getAttribute("role") || "",
+      fallbackTagName: tagName,
+      fallbackPath: buildFallbackPath(element),
       id: element.id || "",
       classList: Array.from(element.classList || []).filter(
         (cls) => !isLikelyGeneratedClassName(cls),
       ),
-      selector: getElementSelector(element),
-      fallbackPath: buildFallbackPath(element),
+      placeholder: element.getAttribute("placeholder") || "",
+      name: element.getAttribute("name") || "",
+      type,
+      href: tagName === "a" ? getSafeLinkHref(element) : "",
+      pageUrl: normalizeGuideUrl(window.location.href),
       rect: {
         x: Math.round(rect.x),
         y: Math.round(rect.y),
@@ -320,320 +186,384 @@
         documentX: Math.round(rect.x + window.scrollX),
         documentY: Math.round(rect.y + window.scrollY),
       },
-      parentText: getContextText(
-        element,
-        "section, article, main, form, nav, aside",
-      ),
-      sectionText: getContextText(
-        element,
-        "section, article, form, [role='region'], [data-testid]",
-      ),
-      visual: {
-        color: style.color,
-        backgroundColor: style.backgroundColor,
-        fontSize: style.fontSize,
-        fontWeight: style.fontWeight,
-        borderRadius: style.borderRadius,
-        boxShadow: style.boxShadow,
-      },
-      comment,
-      targetId: element.dataset.clickNotesTargetId || "",
     };
   }
 
-  async function saveNote(note) {
-    if (!chrome?.runtime?.id) return 0;
-    const { notes } = await chrome.storage.local.get({ notes: [] });
-    notes.push(note);
-    await chrome.storage.local.set({ notes });
-    return notes.length;
+  function getSafeLinkHref(element) {
+    const href = element.getAttribute("href") || "";
+    if (!href) return "";
+    try {
+      return normalizeGuideUrl(new URL(href, window.location.href).href);
+    } catch {
+      return href.split("#")[0].split("?")[0];
+    }
   }
 
-  function openNoteModal(target, clickX, clickY) {
-    modalOpen = true;
-    clearHighlight();
-    clearSelected();
-    selectedElement = target;
+  function clearHover() {
+    if (hoveredElement) hoveredElement.classList.remove("click-guide-hover-highlight");
+    hoveredElement = null;
+  }
 
-    const modal = document.createElement("div");
-    modal.id = "click-notes-modal";
-    // Position off-screen first so we can measure actual rendered size
-    modal.style.left = "-9999px";
-    modal.style.top = "-9999px";
+  function ensureOverlayLayer() {
+    if (overlayLayer && document.body.contains(overlayLayer)) return overlayLayer;
+    overlayLayer = document.createElement("div");
+    overlayLayer.id = "click-guide-overlay-layer";
+    document.body.appendChild(overlayLayer);
+    return overlayLayer;
+  }
 
-    const summary = `${target.tagName.toLowerCase()}: ${getTextSnippet(target.innerText || target.getAttribute("aria-label") || getElementSelector(target), 42)}`;
-    const confidence = getSelectorConfidence(
-      target,
-      getElementSelector(target),
+  function clearOverlay() {
+    clearHover();
+    if (overlayLayer) overlayLayer.innerHTML = "";
+    if (urlWatchTimer) clearInterval(urlWatchTimer);
+    urlWatchTimer = null;
+  }
+
+  function clampToViewport(left, top, width, height) {
+    const margin = 12;
+    return {
+      left: Math.max(margin, Math.min(left, window.innerWidth - width - margin)),
+      top: Math.max(margin, Math.min(top, window.innerHeight - height - margin)),
+    };
+  }
+
+  function isElementVisible(element) {
+    const rect = element.getBoundingClientRect();
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.right > 0 &&
+      rect.top < window.innerHeight &&
+      rect.left < window.innerWidth
     );
-    const hint =
-      confidence === "weak"
-        ? `<div class="cn-hint">Weak selector — add <code>${suggestDataNote(target)}</code> to this element for a reliable identifier.</div>`
-        : "";
+  }
 
-    modal.innerHTML = `
-      <div class="target-summary">${summary}</div>
-      ${hint}
-      <textarea id="click-notes-text" placeholder="Write a quick note..."></textarea>
-      <div class="actions">
-        <button id="click-notes-cancel" type="button">Cancel</button>
-        <button id="click-notes-save" type="button">Save note</button>
+  function findTarget(step) {
+    const target = step?.target || {};
+    const attempts = [target.selector, target.fallbackPath].filter(Boolean);
+    for (const selector of attempts) {
+      try {
+        const element = document.querySelector(selector);
+        if (element instanceof HTMLElement) return element;
+      } catch {}
+    }
+    const candidates = Array.from(
+      document.querySelectorAll(target.fallbackTagName || "button, a, input, textarea, select, [role]"),
+    ).filter((item) => item instanceof HTMLElement);
+    if (target.fallbackAriaLabel) {
+      const match = candidates.find(
+        (item) => item.getAttribute("aria-label") === target.fallbackAriaLabel,
+      );
+      if (match) return match;
+    }
+    if (target.fallbackRole && target.fallbackText) {
+      const match = candidates.find(
+        (item) =>
+          item.getAttribute("role") === target.fallbackRole &&
+          getTextSnippet(item.innerText || item.textContent || "").includes(target.fallbackText),
+      );
+      if (match) return match;
+    }
+    if (target.fallbackText) {
+      return (
+        candidates.find((item) =>
+          getTextSnippet(item.innerText || item.textContent || "").includes(target.fallbackText),
+        ) || null
+      );
+    }
+    return null;
+  }
+
+  function positionPopup(popup, rect, placement) {
+    const popupRect = popup.getBoundingClientRect();
+    const desired = {
+      top: { left: rect.left, top: rect.top - popupRect.height - 14 },
+      right: { left: rect.right + 14, top: rect.top },
+      bottom: { left: rect.left, top: rect.bottom + 14 },
+      left: { left: rect.left - popupRect.width - 14, top: rect.top },
+    };
+    const order =
+      placement === "auto"
+        ? ["right", "bottom", "top", "left"]
+        : [placement, "right", "bottom", "top", "left"];
+    let picked = desired.right;
+    for (const key of order) {
+      const option = desired[key];
+      if (
+        option.left >= 8 &&
+        option.top >= 8 &&
+        option.left + popupRect.width <= window.innerWidth - 8 &&
+        option.top + popupRect.height <= window.innerHeight - 8
+      ) {
+        picked = option;
+        break;
+      }
+    }
+    const clamped = clampToViewport(picked.left, picked.top, popupRect.width, popupRect.height);
+    popup.style.left = `${clamped.left}px`;
+    popup.style.top = `${clamped.top}px`;
+  }
+
+  function renderMissingStep(step) {
+    const layer = ensureOverlayLayer();
+    layer.innerHTML = "";
+    const card = document.createElement("div");
+    card.id = "click-guide-popup";
+    card.className = "click-guide-missing";
+    card.innerHTML = `
+      <button class="click-guide-close" type="button" aria-label="Close">x</button>
+      <h2>Element not found</h2>
+      <p>This step may be outdated or the page may not have loaded yet.</p>
+      <div class="click-guide-actions">
+        <button type="button" data-action="retry">Retry</button>
+        <button type="button" data-action="skip">Skip step</button>
+        <button type="button" data-action="close">Close guide</button>
       </div>
     `;
-
-    document.body.appendChild(modal);
-
-    // Measure actual size, then clamp into viewport
-    const { width: mw, height: mh } = modal.getBoundingClientRect();
-    const { left, top } = clampToViewport(clickX + 10, clickY + 10, mw, mh);
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
-
-    const textarea = modal.querySelector("#click-notes-text");
-    const cancelBtn = modal.querySelector("#click-notes-cancel");
-    const saveBtn = modal.querySelector("#click-notes-save");
-    textarea.focus();
-
-    // Keep modal clamped within viewport on scroll, resize, or zoom
-    const repositionModal = () => {
-      const mr = modal.getBoundingClientRect();
-      const { left: l, top: t } = clampToViewport(
-        parseFloat(modal.style.left),
-        parseFloat(modal.style.top),
-        mr.width,
-        mr.height,
-      );
-      modal.style.left = `${l}px`;
-      modal.style.top = `${t}px`;
-    };
-    window.addEventListener("resize", repositionModal);
-    window.addEventListener("scroll", repositionModal, { passive: true });
-
-    const closeModal = () => {
-      modalOpen = false;
-      clearSelected();
-      window.removeEventListener("resize", repositionModal);
-      window.removeEventListener("scroll", repositionModal);
-      modal.remove();
-    };
-
-    const saveCurrentNote = async () => {
-      const comment = textarea.value;
-      if (!comment.trim()) return textarea.focus();
-      if (!target.dataset.clickNotesTargetId)
-        target.dataset.clickNotesTargetId = `cn-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const note = buildNotePayload(target, comment);
-      closeModal(); // ← close immediately, before any async work
-      const count = await saveNote(note);
-      await renderPinsForCurrentPage();
-      showToast(`${count} notes saved`);
-    };
-
-    cancelBtn.addEventListener("click", closeModal);
-    saveBtn.addEventListener("click", saveCurrentNote);
-    textarea.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeModal();
-      }
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-        event.preventDefault();
-        saveCurrentNote();
-      }
+    layer.append(card);
+    card.style.left = `${Math.max(12, window.innerWidth / 2 - 160)}px`;
+    card.style.top = `${Math.max(12, window.innerHeight / 2 - 110)}px`;
+    card.addEventListener("click", (event) => {
+      const action = event.target?.dataset?.action;
+      if (event.target?.classList?.contains("click-guide-close") || action === "close")
+        stopPlayback();
+      if (action === "retry") renderPlaybackStep();
+      if (action === "skip") goToStep(activePlayback.stepIndex + 1);
     });
+  }
+
+  async function renderPlaybackStep() {
+    if (!activePlayback) return;
+    const { guide, stepIndex } = activePlayback;
+    const step = guide.steps[stepIndex];
+    if (!step) return stopPlayback();
+    const target = findTarget(step);
+    if (!target) {
+      renderMissingStep(step);
+      return;
+    }
+    if (step.playback?.autoScroll !== false && !isElementVisible(target)) {
+      target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+      await new Promise((resolve) => setTimeout(resolve, 420));
+    }
+
+    const layer = ensureOverlayLayer();
+    layer.innerHTML = "";
+    const rect = target.getBoundingClientRect();
+    if (step.playback?.dimPage) {
+      layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
+    }
+    if (step.playback?.highlightTarget !== false) {
+      const highlight = document.createElement("div");
+      highlight.className = "click-guide-target-highlight";
+      highlight.style.left = `${rect.left + window.scrollX}px`;
+      highlight.style.top = `${rect.top + window.scrollY}px`;
+      highlight.style.width = `${Math.max(8, rect.width)}px`;
+      highlight.style.height = `${Math.max(8, rect.height)}px`;
+      layer.append(highlight);
+    }
+    {
+      const popup = document.createElement("div");
+      popup.id = "click-guide-popup";
+      const compact = step.playback?.showPopup === false;
+      if (compact) popup.className = "click-guide-compact";
+      popup.innerHTML = compact
+        ? `
+          <button class="click-guide-close" type="button" aria-label="Close">x</button>
+          <div class="click-guide-count"></div>
+          <div class="click-guide-actions">
+            <button type="button" data-action="prev">Previous</button>
+            <button type="button" data-action="next">Next</button>
+          </div>
+        `
+        : `
+          <button class="click-guide-close" type="button" aria-label="Close">x</button>
+          <h2></h2>
+          <p></p>
+          <div class="click-guide-count"></div>
+          <div class="click-guide-actions">
+            <button type="button" data-action="prev">Previous</button>
+            <button type="button" data-action="next">Next</button>
+          </div>
+        `;
+      if (!compact) {
+        popup.querySelector("h2").textContent = step.title || "Untitled step";
+        popup.querySelector("p").textContent = step.body || "";
+      }
+      popup.querySelector(".click-guide-count").textContent = `Step ${stepIndex + 1} of ${guide.steps.length}`;
+      popup.querySelector('[data-action="prev"]').disabled = stepIndex === 0;
+      popup.querySelector('[data-action="next"]').textContent =
+        stepIndex >= guide.steps.length - 1 ? "Finish" : "Next";
+      layer.append(popup);
+      positionPopup(popup, rect, step.playback?.popupPlacement || "auto");
+      popup.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const action = event.target?.dataset?.action;
+        if (event.target?.classList?.contains("click-guide-close")) stopPlayback();
+        if (action === "prev") goToStep(activePlayback.stepIndex - 1);
+        if (action === "next") goToStep(activePlayback.stepIndex + 1);
+      });
+    }
+    watchAdvanceMode(step);
+  }
+
+  function elFromHtml(html) {
+    const template = document.createElement("template");
+    template.innerHTML = html.trim();
+    return template.content.firstElementChild;
+  }
+
+  function watchAdvanceMode(step) {
+    if (urlWatchTimer) clearInterval(urlWatchTimer);
+    urlWatchTimer = null;
+    if (step.advance?.mode === "elementVisible" && step.advance?.value) {
+      urlWatchTimer = setInterval(() => {
+        try {
+          const element = document.querySelector(step.advance.value);
+          if (element instanceof HTMLElement && isElementVisible(element))
+            goToStep(activePlayback.stepIndex + 1);
+        } catch {}
+      }, 600);
+      return;
+    }
+    if (step.advance?.mode !== "urlMatch" || !step.advance?.value) return;
+    urlWatchTimer = setInterval(() => {
+      if (window.location.href.includes(step.advance.value)) goToStep(activePlayback.stepIndex + 1);
+    }, 600);
+  }
+
+  function goToStep(stepIndex) {
+    if (!activePlayback) return;
+    if (stepIndex < 0) return;
+    if (stepIndex >= activePlayback.guide.steps.length) return stopPlayback();
+    const nextStep = activePlayback.guide.steps[stepIndex];
+    const nextPage = nextStep?.pageUrl || activePlayback.guide.startUrl;
+    if (nextPage && normalizeGuideUrl(window.location.href) !== normalizeGuideUrl(nextPage)) {
+      safeStorage(() =>
+        chrome.storage.local.set({
+          activePlayback: {
+            guide: activePlayback.guide,
+            stepIndex,
+            tabId: activePlayback.tabId,
+          },
+        }),
+      );
+      window.location.assign(nextPage);
+      return;
+    }
+    activePlayback.stepIndex = stepIndex;
+    renderPlaybackStep();
+  }
+
+  function stopPlayback() {
+    mode = "idle";
+    activePlayback = null;
+    clearOverlay();
+  }
+
+  function scheduleReposition() {
+    if (repositionRaf || mode !== "playing-guide") return;
+    repositionRaf = requestAnimationFrame(() => {
+      repositionRaf = null;
+      renderPlaybackStep();
+    });
+  }
+
+  function startSelectMode() {
+    stopPlayback();
+    mode = "builder-selecting-target";
+    showSelectionToast();
+  }
+
+  function showSelectionToast() {
+    const existing = document.getElementById("click-guide-selection-toast");
+    if (existing) existing.remove();
+    const toast = document.createElement("div");
+    toast.id = "click-guide-selection-toast";
+    toast.textContent = "Select an element for this guide step";
+    document.body.appendChild(toast);
+  }
+
+  function finishSelectMode(target) {
+    const payload = captureTarget(target);
+    mode = "idle";
+    clearHover();
+    document.getElementById("click-guide-selection-toast")?.remove();
+    safeStorage(() => chrome.storage.local.set({ selectedGuideTarget: payload }));
+  }
+
+  function onMouseMove(event) {
+    if (mode !== "builder-selecting-target") return;
+    const target = event.target;
+    if (!(target instanceof HTMLElement) || isOverlayElement(target)) return;
+    const resolved = getTargetElement(target);
+    if (hoveredElement !== resolved) {
+      clearHover();
+      hoveredElement = resolved;
+      hoveredElement.classList.add("click-guide-hover-highlight");
+    }
   }
 
   function onClick(event) {
-    if (!captureEnabled || modalOpen) return;
+    if (mode !== "builder-selecting-target") return;
     const target = event.target;
-    if (!(target instanceof HTMLElement)) return;
-    if (target.closest("#click-notes-modal")) return;
-    // Let pin clicks through to their own handler
-    if (target.closest(".click-notes-pin-clickable")) return;
+    if (!(target instanceof HTMLElement) || isOverlayElement(target)) return;
     event.preventDefault();
     event.stopPropagation();
-    const resolvedTarget = getTargetElement(target);
-    openNoteModal(resolvedTarget, event.clientX, event.clientY);
-  }
-
-  async function openEditModal(noteIndex, x, y) {
-    if (!chrome?.runtime?.id) return;
-    if (modalOpen) return;
-    const { notes } = await chrome.storage.local.get({ notes: [] });
-    const note = notes[noteIndex];
-    if (!note) return;
-
-    modalOpen = true;
-    const modal = document.createElement("div");
-    modal.id = "click-notes-modal";
-    modal.style.left = "-9999px";
-    modal.style.top = "-9999px";
-
-    const summary = `${note.tagName || "?"}: ${getTextSnippet(note.text || note.selector || "", 42)}`;
-    modal.innerHTML = `
-      <div class="target-summary">${summary}</div>
-      <textarea id="click-notes-text" placeholder="Write a quick note...">${note.comment || ""}</textarea>
-      <div class="actions">
-        <button id="click-notes-delete" type="button">Delete</button>
-        <button id="click-notes-cancel" type="button">Cancel</button>
-        <button id="click-notes-save" type="button">Save</button>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-    const { width: mw, height: mh } = modal.getBoundingClientRect();
-    const { left, top } = clampToViewport(x, y, mw, mh);
-    modal.style.left = `${left}px`;
-    modal.style.top = `${top}px`;
-
-    const textarea = modal.querySelector("#click-notes-text");
-    const cancelBtn = modal.querySelector("#click-notes-cancel");
-    const saveBtn = modal.querySelector("#click-notes-save");
-    const deleteBtn = modal.querySelector("#click-notes-delete");
-
-    textarea.focus();
-    textarea.select();
-
-    const repositionModal = () => {
-      const mr = modal.getBoundingClientRect();
-      const { left: l, top: t } = clampToViewport(
-        parseFloat(modal.style.left),
-        parseFloat(modal.style.top),
-        mr.width, mr.height,
-      );
-      modal.style.left = `${l}px`;
-      modal.style.top = `${t}px`;
-    };
-    window.addEventListener("resize", repositionModal);
-    window.addEventListener("scroll", repositionModal, { passive: true });
-
-    const closeModal = () => {
-      modalOpen = false;
-      window.removeEventListener("resize", repositionModal);
-      window.removeEventListener("scroll", repositionModal);
-      modal.remove();
-    };
-
-    const saveEdit = async () => {
-      const comment = textarea.value;
-      if (!comment.trim()) return textarea.focus();
-      closeModal();
-      if (!chrome?.runtime?.id) return;
-      const { notes: latest } = await chrome.storage.local.get({ notes: [] });
-      if (latest[noteIndex]) {
-        latest[noteIndex] = { ...latest[noteIndex], comment };
-        await chrome.storage.local.set({ notes: latest });
-      }
-      await renderPinsForCurrentPage();
-      showToast("Note updated");
-    };
-
-    const deleteNote = async () => {
-      closeModal();
-      if (!chrome?.runtime?.id) return;
-      const { notes: latest } = await chrome.storage.local.get({ notes: [] });
-      latest.splice(noteIndex, 1);
-      await chrome.storage.local.set({ notes: latest });
-      await renderPinsForCurrentPage();
-      showToast("Note deleted");
-    };
-
-    cancelBtn.addEventListener("click", closeModal);
-    saveBtn.addEventListener("click", saveEdit);
-    deleteBtn.addEventListener("click", deleteNote);
-    textarea.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") { event.preventDefault(); closeModal(); }
-      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); saveEdit(); }
-    });
+    event.stopImmediatePropagation();
+    finishSelectMode(getTargetElement(target));
   }
 
   document.addEventListener("mousemove", onMouseMove, true);
   document.addEventListener("click", onClick, true);
-  document.addEventListener("scroll", scheduleOverlaySync, {
-    passive: true,
-    capture: true,
-  });
-  window.addEventListener("resize", scheduleOverlaySync);
-
-  // Stop capture when tab loses focus (user switches tabs)
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden && captureEnabled) {
-      captureEnabled = false;
-      clearHighlight();
-      clearSelected();
-    }
-  });
-
-  // Escape key kills capture mode from the page itself
   document.addEventListener(
     "keydown",
     (event) => {
-      if (event.key === "Escape" && captureEnabled && !modalOpen) {
-        captureEnabled = false;
-        clearHighlight();
-        clearSelected();
+      if (event.key === "Escape" && mode === "builder-selecting-target") {
+        mode = "idle";
+        clearHover();
+        document.getElementById("click-guide-selection-toast")?.remove();
       }
+      if (event.key === "Escape" && mode === "playing-guide") stopPlayback();
     },
     true,
   );
+  document.addEventListener("scroll", scheduleReposition, { passive: true, capture: true });
+  window.addEventListener("resize", scheduleReposition);
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message.type === "CLICK_NOTES_PING") {
-      sendResponse({ loaded: true });
+    if (message.type === "CLICK_GUIDE_PING") {
+      sendResponse({ loaded: true, mode });
       return true;
     }
-    if (message.type === "CLICK_NOTES_START_CAPTURE") {
-      captureEnabled = true;
-      renderPinsForCurrentPage();
-      safeStorage(() =>
-        chrome.storage.local
-          .get({ notes: [] })
-          .then(({ notes }) =>
-            sendResponse({ captureEnabled, noteCount: notes.length }),
-          ),
-      );
+    if (message.type === "CLICK_GUIDE_SELECT_STEP_TARGET") {
+      startSelectMode();
+      sendResponse({ ok: true });
       return true;
     }
-    if (message.type === "CLICK_NOTES_STOP_CAPTURE") {
-      captureEnabled = false;
-      clearHighlight();
-      clearSelected();
-      document.querySelectorAll(".click-notes-highlight").forEach((el) => el.classList.remove("click-notes-highlight"));
-      safeStorage(() =>
-        chrome.storage.local
-          .get({ notes: [] })
-          .then(({ notes }) =>
-            sendResponse({ captureEnabled, noteCount: notes.length }),
-          ),
-      );
+    if (message.type === "CLICK_GUIDE_START_PLAYBACK") {
+      mode = "playing-guide";
+      activePlayback = { guide: message.guide, stepIndex: message.stepIndex || 0, tabId: message.tabId };
+      renderPlaybackStep().then(() => sendResponse({ ok: true }));
       return true;
     }
-    if (message.type === "CLICK_NOTES_CLEAR_PINS") {
-      captureEnabled = false;
-      clearHighlight();
-      clearSelected();
-      document.querySelectorAll(".click-notes-highlight").forEach((el) => el.classList.remove("click-notes-highlight"));
-      const layer = ensurePinLayer();
-      layer.innerHTML = "";
-      sendResponse({ cleared: true });
-      return true;
-    }
-    if (message.type === "CLICK_NOTES_GET_STATE") {
-      safeStorage(() =>
-        chrome.storage.local
-          .get({ notes: [] })
-          .then(({ notes }) =>
-            sendResponse({ captureEnabled, noteCount: notes.length }),
-          ),
-      );
-      return true;
-    }
-    if (message.type === "CLICK_NOTES_EDIT_NOTE") {
-      const { noteIndex } = message;
-      openEditModal(noteIndex, window.innerWidth / 2 - 150, window.innerHeight / 2 - 130);
+    if (message.type === "CLICK_GUIDE_STOP_PLAYBACK") {
+      stopPlayback();
       sendResponse({ ok: true });
       return true;
     }
     return false;
   });
+
+  safeStorage(() =>
+    chrome.storage.local.get({ activePlayback: null }).then(({ activePlayback: stored }) => {
+      if (!stored?.guide) return;
+      chrome.storage.local.remove("activePlayback");
+      mode = "playing-guide";
+      activePlayback = { guide: stored.guide, stepIndex: stored.stepIndex || 0, tabId: stored.tabId };
+      renderPlaybackStep();
+    }),
+  );
 })();
