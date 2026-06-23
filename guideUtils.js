@@ -79,14 +79,14 @@
       body: String(step?.body || "").trim(),
       pageUrl: normalizeGuideUrl(step?.pageUrl || target.pageUrl || ""),
       target: {
-        selector: target.selector || "",
+        selector: textSnippet(target.selector, 500),
         selectorConfidence: target.selectorConfidence || "weak",
-        fallbackPath: target.fallbackPath || "",
+        fallbackPath: textSnippet(target.fallbackPath, 500),
         fallbackText: textSnippet(target.fallbackText, 160),
         fallbackAriaLabel: textSnippet(target.fallbackAriaLabel, 160),
         fallbackRole: textSnippet(target.fallbackRole, 80),
         fallbackTagName: /^[a-z][a-z0-9-]*$/.test(fallbackTagName) ? fallbackTagName : "",
-        id: String(target.id || ""),
+        id: textSnippet(target.id, 160),
         classList: normalizeClassList(target.classList),
         placeholder: textSnippet(target.placeholder, 160),
         name: textSnippet(target.name, 120),
@@ -107,7 +107,7 @@
       },
       advance: {
         mode: normalizeAdvanceMode(step?.advance?.mode),
-        value: step?.advance?.value || "",
+        value: textSnippet(step?.advance?.value, 500),
         allowManualFallback: step?.advance?.allowManualFallback !== false,
       },
     };

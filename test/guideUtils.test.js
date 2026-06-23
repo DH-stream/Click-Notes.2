@@ -204,3 +204,24 @@ test("normalizeStep defaults unsafe playback placement and advance mode", () => 
   assert.equal(normalized.advance.value, "#done");
   assert.equal(normalized.advance.allowManualFallback, false);
 });
+
+test("normalizeStep limits imported selector fields", () => {
+  const longSelector = `#${"target".repeat(120)}`;
+  const normalized = normalizeStep(
+    {
+      title: "Large metadata",
+      target: {
+        selector: longSelector,
+        fallbackPath: longSelector,
+        id: "id".repeat(120),
+      },
+      advance: { mode: "elementVisible", value: longSelector },
+    },
+    0,
+  );
+
+  assert.equal(normalized.target.selector.length, 500);
+  assert.equal(normalized.target.fallbackPath.length, 500);
+  assert.equal(normalized.target.id.length, 160);
+  assert.equal(normalized.advance.value.length, 500);
+});
