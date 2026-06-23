@@ -435,6 +435,11 @@ async function consumePendingSelection() {
     updateGuide(guide);
     await saveGuides();
   } else {
+    if (pendingGuideEdit.stepId) {
+      state.view = "editor";
+      setStatus("Step no longer exists");
+      return;
+    }
     const step = createStep(selectedGuideTarget);
     state.pendingTarget = step.target;
     state.editingStepId = step.id;
