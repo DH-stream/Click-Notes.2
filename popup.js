@@ -237,7 +237,7 @@ function renderStepEditor() {
     field("Title", title),
     field("Body / instruction", body),
     checkbox(
-      "showPopup",
+      "showInstructionText",
       "Show instruction text",
       (step.playback?.showInstructionText ?? step.playback?.showPopup) !== false,
     ),
@@ -247,7 +247,6 @@ function renderStepEditor() {
     field("Popup placement", placement),
     field("Advance", advanceMode),
     field("Advance value", advanceValue),
-    checkbox("allowManualFallback", "Allow manual fallback", step.advance?.allowManualFallback !== false),
   ]));
 }
 
@@ -380,13 +379,14 @@ async function deleteStep(guideId, stepId) {
 async function saveStepFromForm(step) {
   const guide = activeGuide();
   if (!guide) return;
+  const showInstructionText = document.getElementById("showInstructionText").checked;
   const saved = {
     ...step,
     title: document.getElementById("stepTitle").value.trim() || "Untitled step",
     body: document.getElementById("stepBody").value.trim(),
     playback: {
-      showInstructionText: document.getElementById("showPopup").checked,
-      showPopup: document.getElementById("showPopup").checked,
+      showInstructionText,
+      showPopup: showInstructionText,
       highlightTarget: document.getElementById("highlightTarget").checked,
       dimPage: document.getElementById("dimPage").checked,
       autoScroll: document.getElementById("autoScroll").checked,
@@ -395,7 +395,7 @@ async function saveStepFromForm(step) {
     advance: {
       mode: document.getElementById("advanceMode").value,
       value: document.getElementById("advanceValue").value.trim(),
-      allowManualFallback: document.getElementById("allowManualFallback").checked,
+      allowManualFallback: true,
     },
   };
   const existingIndex = guide.steps.findIndex((item) => item.id === saved.id);
