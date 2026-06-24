@@ -596,7 +596,7 @@
       <span>Nice work.</span>
     `;
     layer.append(celebration);
-    celebrationTimer = setTimeout(clearOverlay, 2400);
+    celebrationTimer = setTimeout(clearOverlay, 4300);
   }
 
   async function renderPlaybackStep() {

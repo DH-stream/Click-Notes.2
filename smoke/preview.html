@@ -35,16 +35,16 @@
   <style>
     :root {
       color-scheme: light;
-      --ink: #141412;
-      --muted: #68645c;
-      --line: #dad4c8;
-      --paper: #fbfaf5;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d7dde8;
+      --paper: #f6f8fb;
       --panel: #ffffff;
-      --mint: #d9f2e5;
-      --mint-ink: #133527;
-      --blue: #2f5f9f;
-      --coral: #e86f51;
-      --shadow: 0 18px 50px rgba(20, 20, 18, 0.12);
+      --accent-soft: #e8eefc;
+      --accent-ink: #1d4ed8;
+      --success-soft: #e6f4ef;
+      --success-ink: #0f766e;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
     }
 
     * { box-sizing: border-box; }
@@ -53,8 +53,8 @@
       margin: 0;
       min-height: 150vh;
       background:
-        linear-gradient(90deg, rgba(47, 95, 159, 0.07) 1px, transparent 1px),
-        linear-gradient(rgba(47, 95, 159, 0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(29, 78, 216, 0.04) 1px, transparent 1px),
         var(--paper);
       background-size: 36px 36px;
       color: var(--ink);
@@ -118,7 +118,7 @@
     .primary-action:hover,
     .secondary-action:hover,
     .icon-action:hover {
-      border-color: #bdb4a5;
+      border-color: #aeb9cb;
     }
 
     .layout {
@@ -129,7 +129,7 @@
     }
 
     .workspace {
-      background: rgba(255, 255, 255, 0.72);
+      background: rgba(255, 255, 255, 0.78);
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
@@ -142,23 +142,23 @@
       gap: 8px;
       padding: 10px 12px;
       border-bottom: 1px solid var(--line);
-      background: #f0ece3;
+      background: #eef2f7;
     }
 
     .dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: var(--coral);
+      background: #cbd5e1;
     }
 
-    .dot:nth-child(2) { background: #f0b847; }
-    .dot:nth-child(3) { background: #56b37f; }
+    .dot:nth-child(2) { background: #94a3b8; }
+    .dot:nth-child(3) { background: #64748b; }
 
     .address {
       margin-left: 8px;
       flex: 1;
-      border: 1px solid #d0c8ba;
+      border: 1px solid #cbd5e1;
       border-radius: 6px;
       background: #fff;
       color: var(--muted);
@@ -180,7 +180,7 @@
     }
 
     .eyebrow {
-      color: var(--blue);
+      color: var(--accent-ink);
       font-family: ui-monospace, "Cascadia Mono", monospace;
       font-size: 12px;
       font-weight: 750;
@@ -230,8 +230,8 @@
       min-height: 92px;
       border-radius: 8px;
       padding: 14px;
-      background: #f7f5ef;
-      border: 1px solid #ebe5d8;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
     }
 
     .metric strong {
@@ -281,7 +281,7 @@
       top: 18px;
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 8px;
-      background: #121212;
+      background: #101827;
       color: #f3f3f3;
       box-shadow: var(--shadow);
       overflow: hidden;
@@ -299,7 +299,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: #77d794;
+      background: #14b8a6;
     }
 
     .guide-panel h2 {
@@ -334,13 +334,13 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 6px;
       padding: 9px;
-      background: #1a1a1a;
+      background: #172033;
       font-size: 12px;
     }
 
     .step-pill.active {
-      background: #f3f3f3;
-      color: #111;
+      background: var(--accent-soft);
+      color: #172033;
     }
 
     .deep-section {
@@ -360,9 +360,9 @@
     }
 
     .handoff-card {
-      background: var(--mint);
-      color: var(--mint-ink);
-      border-color: #b9dfca;
+      background: var(--success-soft);
+      color: var(--success-ink);
+      border-color: #b7ddd2;
     }
 
     .checklist-card ul {
