@@ -470,6 +470,12 @@
   }
 
   function resolvePlaybackTarget(step) {
+    if (step?.target?.anchorMode === "rect") {
+      if (!isSafeRectFallback(step)) return null;
+      const rect = getFallbackRect(step);
+      return rect ? { rect, rectFallback: true } : null;
+    }
+
     const element = findTargetElement(step);
     if (element) return { element, rectFallback: false };
     if (!isSafeRectFallback(step)) return null;
