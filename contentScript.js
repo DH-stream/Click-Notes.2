@@ -352,6 +352,17 @@
     layer.querySelectorAll(".click-guide-target-highlight, #click-guide-popup").forEach((item) => item.remove());
   }
 
+  function positionDimLayer(layer, rect, rectFallback) {
+    const dimLayer = layer.querySelector("#click-guide-dim-layer");
+    if (!dimLayer) return;
+    const left = rectFallback ? rect.documentX : rect.left + window.scrollX;
+    const top = rectFallback ? rect.documentY : rect.top + window.scrollY;
+    dimLayer.style.left = `${left}px`;
+    dimLayer.style.top = `${top}px`;
+    dimLayer.style.width = `${Math.max(8, rect.width)}px`;
+    dimLayer.style.height = `${Math.max(8, rect.height)}px`;
+  }
+
   function hideSelectionToast() {
     if (selectionToastTimer) clearTimeout(selectionToastTimer);
     selectionToastTimer = null;
@@ -591,6 +602,7 @@
       ? resolvedTarget.element.getBoundingClientRect()
       : getFallbackRect(step);
     preparePlaybackLayer(layer, Boolean(step.playback?.dimPage));
+    positionDimLayer(layer, rect, resolvedTarget.rectFallback);
     if (step.playback?.highlightTarget !== false) {
       const highlight = document.createElement("div");
       highlight.className = "click-guide-target-highlight";

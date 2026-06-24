@@ -14,9 +14,10 @@
 }
 
 #click-guide-dim-layer {
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.58));
+  position: absolute;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.54);
   pointer-events: none;
   animation: click-guide-fade-in 160ms ease-out both;
 }
