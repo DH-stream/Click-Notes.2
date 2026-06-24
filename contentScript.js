@@ -23,6 +23,7 @@
   let repositionRaf = null;
   let urlWatchTimer = null;
   let selectionToastTimer = null;
+  let celebrationTimer = null;
 
   function safeStorage(fn) {
     try {
@@ -340,7 +341,29 @@
     clearHover();
     if (overlayLayer) overlayLayer.innerHTML = "";
     if (urlWatchTimer) clearInterval(urlWatchTimer);
+    if (celebrationTimer) clearTimeout(celebrationTimer);
     urlWatchTimer = null;
+    celebrationTimer = null;
+  }
+
+  function preparePlaybackLayer(layer, dimPage) {
+    const existingDimLayer = layer.querySelector("#click-guide-dim-layer");
+    if (dimPage && !existingDimLayer) {
+      layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
+    }
+    if (!dimPage && existingDimLayer) existingDimLayer.remove();
+    layer.querySelectorAll(".click-guide-target-highlight, #click-guide-popup").forEach((item) => item.remove());
+  }
+
+  function positionDimLayer(layer, rect, rectFallback) {
+    const dimLayer = layer.querySelector("#click-guide-dim-layer");
+    if (!dimLayer) return;
+    const left = rectFallback ? rect.documentX : rect.left + window.scrollX;
+    const top = rectFallback ? rect.documentY : rect.top + window.scrollY;
+    dimLayer.style.left = `${left}px`;
+    dimLayer.style.top = `${top}px`;
+    dimLayer.style.width = `${Math.max(8, rect.width)}px`;
+    dimLayer.style.height = `${Math.max(8, rect.height)}px`;
   }
 
   function hideSelectionToast() {
@@ -512,6 +535,19 @@
     const clamped = clampToViewport(picked.left, picked.top, popupRect.width, popupRect.height);
     popup.style.left = `${clamped.left}px`;
     popup.style.top = `${clamped.top}px`;
+    const pickedPlacement =
+      Object.entries(desired).find(([, option]) => option === picked)?.[0] || "right";
+    popup.classList.add(`click-guide-placement-${pickedPlacement}`);
+    const targetCenterX = rect.left + rect.width / 2;
+    const targetCenterY = rect.top + rect.height / 2;
+    popup.style.setProperty(
+      "--click-guide-arrow-x",
+      `${Math.round(Math.max(18, Math.min(targetCenterX - clamped.left, popupRect.width - 18)))}px`,
+    );
+    popup.style.setProperty(
+      "--click-guide-arrow-y",
+      `${Math.round(Math.max(18, Math.min(targetCenterY - clamped.top, popupRect.height - 18)))}px`,
+    );
   }
 
   function renderMissingStep(step) {
@@ -542,6 +578,27 @@
     });
   }
 
+  function showCompletionCelebration() {
+    mode = "idle";
+    activePlayback = null;
+    if (urlWatchTimer) clearInterval(urlWatchTimer);
+    urlWatchTimer = null;
+    const layer = ensureOverlayLayer();
+    layer.innerHTML = "";
+    const celebration = document.createElement("div");
+    celebration.id = "click-guide-celebration";
+    celebration.setAttribute("role", "status");
+    celebration.innerHTML = `
+      <div class="click-guide-celebration-burst" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <strong>Guide complete</strong>
+      <span>Nice work.</span>
+    `;
+    layer.append(celebration);
+    celebrationTimer = setTimeout(clearOverlay, 4300);
+  }
+
   async function renderPlaybackStep() {
     if (!activePlayback) return;
     const { guide, stepIndex } = activePlayback;
@@ -565,13 +622,11 @@
     }
 
     const layer = ensureOverlayLayer();
-    layer.innerHTML = "";
     const rect = resolvedTarget.element
       ? resolvedTarget.element.getBoundingClientRect()
       : getFallbackRect(step);
-    if (step.playback?.dimPage) {
-      layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
-    }
+    preparePlaybackLayer(layer, Boolean(step.playback?.dimPage));
+    positionDimLayer(layer, rect, resolvedTarget.rectFallback);
     if (step.playback?.highlightTarget !== false) {
       const highlight = document.createElement("div");
       highlight.className = "click-guide-target-highlight";
@@ -667,7 +722,7 @@
   function goToStep(stepIndex) {
     if (!activePlayback) return;
     if (stepIndex < 0) return;
-    if (stepIndex >= activePlayback.guide.steps.length) return stopPlayback();
+    if (stepIndex >= activePlayback.guide.steps.length) return showCompletionCelebration();
     const nextStep = activePlayback.guide.steps[stepIndex];
     const nextPage = nextStep?.pageUrl || activePlayback.guide.startUrl;
     const safeNextPage = normalizeGuideUrl(nextPage);

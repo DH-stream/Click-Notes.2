@@ -14,57 +14,87 @@
 }
 
 #click-guide-dim-layer {
-  position: fixed;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.58));
-  backdrop-filter: blur(1px);
+  position: absolute;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.54);
   pointer-events: none;
+  animation: click-guide-fade-in 160ms ease-out both;
 }
 
 .click-guide-target-highlight {
   position: absolute;
-  border: 2px solid rgba(255, 255, 255, 0.86);
+  border: 2px solid #7dd3fc;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(125, 211, 252, 0.16);
   box-shadow:
-    0 0 0 4px rgba(0, 0, 0, 0.42),
-    0 0 0 8px rgba(255, 255, 255, 0.08),
-    0 18px 44px rgba(0, 0, 0, 0.48);
+    0 0 0 3px rgba(14, 165, 233, 0.34),
+    0 0 0 8px rgba(20, 184, 166, 0.16),
+    0 0 28px rgba(125, 211, 252, 0.58),
+    0 18px 44px rgba(15, 23, 42, 0.44);
   box-sizing: border-box;
   pointer-events: none;
+  animation: click-guide-target-in 180ms ease-out both;
 }
 
 #click-guide-popup {
   position: fixed;
   z-index: 2147483647;
   width: min(330px, calc(100vw - 24px));
-  background: linear-gradient(145deg, #141414, #0e0e0e);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: linear-gradient(145deg, #172033, #0f172a);
+  border: 1px solid rgba(226, 232, 240, 0.16);
   border-radius: 10px;
-  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.68), 0 1px 0 rgba(255,255,255,0.06) inset;
+  box-shadow: 0 18px 58px rgba(15, 23, 42, 0.52), 0 1px 0 rgba(255,255,255,0.06) inset;
   padding: 15px;
   font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 13px;
   color: #f2f2f2;
   pointer-events: auto;
+  --click-guide-arrow-x: 24px;
+  --click-guide-arrow-y: 24px;
+  animation: click-guide-popup-in 180ms ease-out both;
 }
 
 #click-guide-popup::after {
   content: "";
   position: absolute;
-  left: 22px;
-  bottom: -7px;
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
-  background: #101010;
+  background: #111a2c;
+}
+
+#click-guide-popup.click-guide-placement-top::after {
+  left: var(--click-guide-arrow-x);
+  bottom: -7px;
   border-right: 1px solid rgba(255, 255, 255, 0.12);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
+#click-guide-popup.click-guide-placement-right::after {
+  left: -7px;
+  top: var(--click-guide-arrow-y);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#click-guide-popup.click-guide-placement-bottom::after {
+  left: var(--click-guide-arrow-x);
+  top: -7px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#click-guide-popup.click-guide-placement-left::after {
+  right: -7px;
+  top: var(--click-guide-arrow-y);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
 .click-guide-eyebrow {
   margin-bottom: 7px;
-  color: #8e8e8e;
+  color: #9aa7bd;
   font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
   font-size: 10px;
   font-weight: 650;
@@ -82,7 +112,7 @@
 
 #click-guide-popup p {
   margin: 0;
-  color: #c9c9c9;
+  color: #d5dbe6;
   line-height: 1.5;
   white-space: pre-wrap;
 }
@@ -101,6 +131,10 @@
 #click-guide-popup.click-guide-compact {
   width: auto;
   min-width: 224px;
+}
+
+#click-guide-popup.click-guide-missing::after {
+  display: none;
 }
 
 .click-guide-count {
@@ -127,12 +161,12 @@
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   cursor: pointer;
   transition: background 100ms, border-color 100ms, color 100ms;
-  background: #1a1a1a;
+  background: #202a3d;
   color: #e8e8e8;
 }
 
 #click-guide-popup button:hover {
-  background: #222;
+  background: #26334a;
   border-color: rgba(255, 255, 255, 0.17);
 }
 
@@ -142,8 +176,8 @@
 }
 
 #click-guide-popup [data-action="next"] {
-  background: #f2f2f2;
-  color: #0f0f0f;
+  background: #e8eefc;
+  color: #111827;
   border-color: transparent;
   font-weight: 650;
 }
@@ -170,7 +204,7 @@
   right: 12px;
   bottom: 12px;
   z-index: 2147483647;
-  background: #1a1a1a;
+  background: #172033;
   color: #e8e8e8;
   border: 1px solid rgba(255, 255, 255, 0.1);
   font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', monospace;
@@ -180,4 +214,140 @@
   padding: 6px 11px;
   border-radius: 4px;
   pointer-events: none;
+}
+
+#click-guide-celebration {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 2147483647;
+  display: grid;
+  gap: 5px;
+  min-width: 210px;
+  padding: 18px 20px;
+  border: 1px solid rgba(226, 232, 240, 0.16);
+  border-radius: 10px;
+  background: linear-gradient(145deg, #172033, #0f172a);
+  color: #f2f2f2;
+  box-shadow: 0 22px 68px rgba(15, 23, 42, 0.58), 0 1px 0 rgba(255,255,255,0.06) inset;
+  font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: center;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: click-guide-celebration-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both, click-guide-celebration-out 900ms ease-in 3350ms both;
+}
+
+#click-guide-celebration strong {
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+#click-guide-celebration > span {
+  color: #a9a9a9;
+  font-size: 12px;
+}
+
+.click-guide-celebration-burst {
+  position: relative;
+  width: 76px;
+  height: 38px;
+  margin: 0 auto 4px;
+}
+
+.click-guide-celebration-burst span {
+  position: absolute;
+  left: 35px;
+  bottom: 0;
+  width: 5px;
+  height: 14px;
+  border-radius: 999px;
+  background: #dbeafe;
+  transform-origin: bottom center;
+  animation: click-guide-burst 1300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.click-guide-celebration-burst span:nth-child(1) { transform: rotate(-48deg); }
+.click-guide-celebration-burst span:nth-child(2) { transform: rotate(-24deg); background: #99f6e4; animation-delay: 70ms; }
+.click-guide-celebration-burst span:nth-child(3) { transform: rotate(0deg); background: #bfdbfe; animation-delay: 120ms; }
+.click-guide-celebration-burst span:nth-child(4) { transform: rotate(24deg); background: #a7f3d0; animation-delay: 70ms; }
+.click-guide-celebration-burst span:nth-child(5) { transform: rotate(48deg); background: #c7d2fe; }
+
+@keyframes click-guide-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes click-guide-target-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes click-guide-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes click-guide-celebration-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -44%) scale(0.94);
+  }
+  55% {
+    transform: translate(-50%, -51%) scale(1.02);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes click-guide-celebration-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -58%) scale(0.98);
+  }
+}
+
+@keyframes click-guide-burst {
+  from {
+    opacity: 0;
+    height: 0;
+    translate: 0 8px;
+  }
+  35% {
+    opacity: 1;
+    height: 26px;
+    translate: 0 0;
+  }
+  72% {
+    opacity: 1;
+    height: 18px;
+  }
+  to {
+    opacity: 0;
+    height: 10px;
+    translate: 0 -12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #click-guide-dim-layer,
+  .click-guide-target-highlight,
+  #click-guide-popup,
+  #click-guide-celebration,
+  .click-guide-celebration-burst span {
+    animation: none;
+  }
 }

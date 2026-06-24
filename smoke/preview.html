@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Click Guide Preview</title>
+  <link rel="stylesheet" href="../contentStyle.css" />
+  <script>
+    window.__clickGuideMessages = [];
+    window.chrome = {
+      runtime: {
+        id: "preview",
+        onMessage: {
+          addListener(listener) {
+            window.__clickGuideMessages.push(listener);
+          },
+        },
+      },
+      storage: {
+        local: {
+          data: {},
+          async get(defaults) {
+            return { ...defaults, ...this.data };
+          },
+          async set(values) {
+            this.data = { ...this.data, ...values };
+          },
+          async remove(keys) {
+            for (const key of Array.isArray(keys) ? keys : [keys]) delete this.data[key];
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #d7dde8;
+      --paper: #f6f8fb;
+      --panel: #ffffff;
+      --accent-soft: #e8eefc;
+      --accent-ink: #1d4ed8;
+      --gradient-start: #eef5ff;
+      --gradient-mid: #f7fbff;
+      --gradient-end: #edf7f4;
+      --success-soft: #e6f4ef;
+      --success-ink: #0f766e;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 150vh;
+      background:
+        linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(29, 78, 216, 0.04) 1px, transparent 1px),
+        radial-gradient(circle at 18% 12%, rgba(29, 78, 216, 0.18), transparent 34%),
+        radial-gradient(circle at 88% 4%, rgba(20, 184, 166, 0.14), transparent 30%),
+        linear-gradient(135deg, var(--gradient-start), var(--gradient-mid) 46%, var(--gradient-end)),
+        var(--paper);
+      background-size: 36px 36px;
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 30px 20px 120px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 0 28px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 750;
+    }
+
+    .mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--ink);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+    }
+
+    .preview-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .preview-actions button,
+    .primary-action,
+    .secondary-action,
+    .icon-action {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 9px 12px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+    }
+
+    .preview-actions button:hover,
+    .primary-action:hover,
+    .secondary-action:hover,
+    .icon-action:hover {
+      border-color: #aeb9cb;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .workspace {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .browser-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #eef2f7;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #cbd5e1;
+    }
+
+    .dot:nth-child(2) { background: #94a3b8; }
+    .dot:nth-child(3) { background: #64748b; }
+
+    .address {
+      margin-left: 8px;
+      flex: 1;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      padding: 7px 10px;
+      font-family: ui-monospace, "Cascadia Mono", monospace;
+      font-size: 12px;
+    }
+
+    .app-surface {
+      padding: 24px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(260px, 0.9fr);
+      gap: 22px;
+      align-items: center;
+      min-height: 360px;
+    }
+
+    .eyebrow {
+      color: var(--accent-ink);
+      font-family: ui-monospace, "Cascadia Mono", monospace;
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    h1 {
+      max-width: 620px;
+      margin: 12px 0 12px;
+      font-size: clamp(38px, 6vw, 76px);
+      line-height: 0.94;
+      letter-spacing: 0;
+    }
+
+    .lede {
+      max-width: 560px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.6;
+    }
+
+    .hero-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 14px 32px rgba(20, 20, 18, 0.08);
+      overflow: hidden;
+    }
+
+    .hero-card header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .metric {
+      min-height: 92px;
+      border-radius: 8px;
+      padding: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+    }
+
+    .metric strong {
+      display: block;
+      font-size: 25px;
+      margin-bottom: 4px;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .workflow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+
+    .task {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      min-height: 142px;
+    }
+
+    .task strong { display: block; margin-bottom: 8px; }
+    .task p { color: var(--muted); line-height: 1.5; margin: 0; }
+
+    .primary-action {
+      margin-top: 20px;
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+    }
+
+    .secondary-action {
+      margin-top: 20px;
+      margin-left: 8px;
+      background: #fff;
+    }
+
+    .guide-panel {
+      position: sticky;
+      top: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      background: #101827;
+      color: #f3f3f3;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .guide-panel header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .guide-panel .status-light {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #14b8a6;
+    }
+
+    .guide-panel h2 {
+      margin: 0;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #bdbdbd;
+    }
+
+    .guide-panel section {
+      padding: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .guide-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      font-size: 13px;
+    }
+
+    .guide-row span:last-child { color: #8e8e8e; }
+
+    .step-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .step-pill {
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 9px;
+      background: #172033;
+      font-size: 12px;
+    }
+
+    .step-pill.active {
+      background: var(--accent-soft);
+      color: #172033;
+    }
+
+    .deep-section {
+      margin-top: 520px;
+      display: grid;
+      grid-template-columns: minmax(260px, 440px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .handoff-card,
+    .checklist-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+    }
+
+    .handoff-card {
+      background: var(--success-soft);
+      color: var(--success-ink);
+      border-color: #b7ddd2;
+    }
+
+    .checklist-card ul {
+      margin: 12px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    @media (max-width: 900px) {
+      .layout,
+      .hero,
+      .workflow,
+      .deep-section {
+        grid-template-columns: 1fr;
+      }
+
+      .guide-panel {
+        position: static;
+      }
+
+      h1 {
+        font-size: 42px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <div class="mark">CG</div>
+        <span>Click Guide Preview</span>
+      </div>
+      <div class="preview-actions">
+        <button type="button" data-preview-restart>Replay preview</button>
+      </div>
+    </div>
+
+    <div class="layout">
+      <main class="workspace">
+        <div class="browser-bar">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <div class="address">demo.local/customer-success</div>
+        </div>
+        <div class="app-surface">
+          <section class="hero">
+            <div>
+              <div class="eyebrow" data-guide-id="preview-label">Team onboarding workspace</div>
+              <h1>Teach the product flow while the page stays alive.</h1>
+              <p class="lede">This generated demo plays a Click Guide without installing the extension or saving a tutorial first.</p>
+              <button class="primary-action" type="button" data-guide-id="preview-create">Create guide</button>
+              <button class="secondary-action" type="button">Import guide</button>
+            </div>
+            <aside class="hero-card" data-guide-id="preview-dashboard">
+              <header>
+                <strong>Guide performance</strong>
+                <button class="icon-action" type="button" aria-label="Open actions">...</button>
+              </header>
+              <div class="metric-grid">
+                <div class="metric"><strong>4</strong><span>steps in this demo</span></div>
+                <div class="metric"><strong>0</strong><span>accounts required</span></div>
+                <div class="metric"><strong>1</strong><span>local JSON export</span></div>
+                <div class="metric"><strong>Live</strong><span>DOM highlight</span></div>
+              </div>
+            </aside>
+          </section>
+
+          <section class="workflow" data-guide-id="preview-workflow">
+            <article class="task">
+              <strong>Select an element</strong>
+              <p>Click Guide stores selectors and safe visual metadata for the exact target.</p>
+            </article>
+            <article class="task">
+              <strong>Write the instruction</strong>
+              <p>The creator controls the title, body, placement, and playback behavior.</p>
+            </article>
+            <article class="task">
+              <strong>Play it back</strong>
+              <p>Learners see a calm overlay, highlighted target, and manual controls.</p>
+            </article>
+          </section>
+
+          <section class="deep-section">
+            <article class="handoff-card" data-guide-id="preview-export">
+              <h2>Portable handoff</h2>
+              <p>Export a readable .clickguide file and import it later to start playback immediately.</p>
+            </article>
+            <article class="checklist-card">
+              <h2>MVP smoke checklist</h2>
+              <ul>
+                <li>Create guide</li>
+                <li>Add step and select target</li>
+                <li>Save title and body</li>
+                <li>Replay with highlight and controls</li>
+              </ul>
+            </article>
+          </section>
+        </div>
+      </main>
+
+      <aside class="guide-panel" data-guide-id="preview-popup">
+        <header>
+          <span class="status-light"></span>
+          <h2>Click Guide</h2>
+        </header>
+        <section>
+          <div class="guide-row"><span>Guide</span><span>Customer Success Tour</span></div>
+          <div class="guide-row"><span>Storage</span><span>Local only</span></div>
+          <div class="guide-row"><span>Mode</span><span>Preview playback</span></div>
+        </section>
+        <section>
+          <div class="step-list">
+            <div class="step-pill active">1. Start from the guide creator</div>
+            <div class="step-pill">2. Review the dashboard card</div>
+            <div class="step-pill">3. Inspect the workflow row</div>
+            <div class="step-pill">4. Export the guide</div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </div>
+
+  <script src="../guideUtils.js"></script>
+  <script src="../contentScript.js"></script>
+  <script>
+    const previewUrl = window.ClickGuideUtils.normalizeGuideUrl(location.href);
+    const guide = window.ClickGuideUtils.normalizeGuide({
+      id: "guide-preview",
+      title: "Customer Success Tour",
+      startUrl: previewUrl,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      version: 1,
+      steps: [
+        {
+          id: "step-create",
+          order: 1,
+          title: "Create the guide",
+          body: "The creator starts in the extension popup, then picks a real element on the page.",
+          pageUrl: previewUrl,
+          target: {
+            selector: '[data-guide-id="preview-create"]',
+            fallbackText: "Create guide",
+            fallbackTagName: "button",
+          },
+          playback: {
+            showInstructionText: true,
+            showPopup: true,
+            highlightTarget: true,
+            dimPage: true,
+            autoScroll: true,
+            popupPlacement: "right",
+          },
+          advance: { mode: "manual", value: "", allowManualFallback: true },
+        },
+        {
+          id: "step-dashboard",
+          order: 2,
+          title: "Highlight the exact area",
+          body: "Playback follows the saved target and keeps the surrounding page available.",
+          pageUrl: previewUrl,
+          target: {
+            selector: '[data-guide-id="preview-dashboard"]',
+            fallbackText: "Guide performance",
+            fallbackTagName: "aside",
+          },
+          playback: {
+            showInstructionText: true,
+            showPopup: true,
+            highlightTarget: true,
+            dimPage: true,
+            autoScroll: true,
+            popupPlacement: "left",
+          },
+          advance: { mode: "manual", value: "", allowManualFallback: true },
+        },
+        {
+          id: "step-workflow",
+          order: 3,
+          title: "Explain the workflow",
+          body: "Each step can point to controls, labels, cards, or a saved visual area.",
+          pageUrl: previewUrl,
+          target: {
+            selector: '[data-guide-id="preview-workflow"]',
+            fallbackText: "Select an element",
+            fallbackTagName: "section",
+          },
+          playback: {
+            showInstructionText: true,
+            showPopup: true,
+            highlightTarget: true,
+            dimPage: true,
+            autoScroll: true,
+            popupPlacement: "top",
+          },
+          advance: { mode: "manual", value: "", allowManualFallback: true },
+        },
+        {
+          id: "step-export",
+          order: 4,
+          title: "Share the result",
+          body: "Guides export as readable local files, so teams can pass them around without a backend.",
+          pageUrl: previewUrl,
+          target: {
+            selector: '[data-guide-id="preview-export"]',
+            fallbackText: "Portable handoff",
+            fallbackTagName: "article",
+          },
+          playback: {
+            showInstructionText: true,
+            showPopup: true,
+            highlightTarget: true,
+            dimPage: true,
+            autoScroll: true,
+            popupPlacement: "right",
+          },
+          advance: { mode: "manual", value: "", allowManualFallback: true },
+        },
+      ],
+    });
+
+    function sendGuideMessage(type, extra = {}) {
+      const message = { type, ...extra };
+      window.__clickGuideMessages.forEach((listener) => listener(message, {}, () => {}));
+    }
+
+    function startPreview() {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      sendGuideMessage("CLICK_GUIDE_STOP_PLAYBACK");
+      sendGuideMessage("CLICK_GUIDE_START_PLAYBACK", { guide, stepIndex: 0, tabId: 1 });
+    }
+
+    document.querySelector("[data-preview-restart]").addEventListener("click", startPreview);
+    window.addEventListener("load", () => setTimeout(startPreview, 250));
+  </script>
+</body>
+</html>

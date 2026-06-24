@@ -59,6 +59,7 @@ async function ensureInjected(tabId) {
 async function loadGuides() {
   const { guides } = await chrome.storage.local.get({ guides: [] });
   state.guides = Array.isArray(guides) ? guides.map(normalizeGuide) : [];
+  await saveGuides();
 }
 
 async function saveGuides() {
@@ -422,6 +423,13 @@ async function consumePendingSelection() {
   const guide = state.guides.find((item) => item.id === pendingGuideEdit.guideId);
   if (!guide) {
     await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
+    return;
+  }
+  if (pendingGuideEdit.stepId && !guide.steps.some((step) => step.id === pendingGuideEdit.stepId)) {
+    await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
+    state.activeGuideId = guide.id;
+    state.view = "editor";
+    setStatus("Step no longer exists");
     return;
   }
   if (!selectedGuideTarget) return;
