@@ -512,6 +512,19 @@
     const clamped = clampToViewport(picked.left, picked.top, popupRect.width, popupRect.height);
     popup.style.left = `${clamped.left}px`;
     popup.style.top = `${clamped.top}px`;
+    const pickedPlacement =
+      Object.entries(desired).find(([, option]) => option === picked)?.[0] || "right";
+    popup.classList.add(`click-guide-placement-${pickedPlacement}`);
+    const targetCenterX = rect.left + rect.width / 2;
+    const targetCenterY = rect.top + rect.height / 2;
+    popup.style.setProperty(
+      "--click-guide-arrow-x",
+      `${Math.round(Math.max(18, Math.min(targetCenterX - clamped.left, popupRect.width - 18)))}px`,
+    );
+    popup.style.setProperty(
+      "--click-guide-arrow-y",
+      `${Math.round(Math.max(18, Math.min(targetCenterY - clamped.top, popupRect.height - 18)))}px`,
+    );
   }
 
   function renderMissingStep(step) {

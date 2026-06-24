@@ -17,8 +17,8 @@
   position: fixed;
   inset: 0;
   background: radial-gradient(circle at center, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.58));
-  backdrop-filter: blur(1px);
   pointer-events: none;
+  animation: click-guide-fade-in 160ms ease-out both;
 }
 
 .click-guide-target-highlight {
@@ -32,6 +32,7 @@
     0 18px 44px rgba(0, 0, 0, 0.48);
   box-sizing: border-box;
   pointer-events: none;
+  animation: click-guide-target-in 180ms ease-out both;
 }
 
 #click-guide-popup {
@@ -47,19 +48,46 @@
   font-size: 13px;
   color: #f2f2f2;
   pointer-events: auto;
+  --click-guide-arrow-x: 24px;
+  --click-guide-arrow-y: 24px;
+  animation: click-guide-popup-in 180ms ease-out both;
 }
 
 #click-guide-popup::after {
   content: "";
   position: absolute;
-  left: 22px;
-  bottom: -7px;
   width: 12px;
   height: 12px;
   transform: rotate(45deg);
   background: #101010;
+}
+
+#click-guide-popup.click-guide-placement-top::after {
+  left: var(--click-guide-arrow-x);
+  bottom: -7px;
   border-right: 1px solid rgba(255, 255, 255, 0.12);
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#click-guide-popup.click-guide-placement-right::after {
+  left: -7px;
+  top: var(--click-guide-arrow-y);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#click-guide-popup.click-guide-placement-bottom::after {
+  left: var(--click-guide-arrow-x);
+  top: -7px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#click-guide-popup.click-guide-placement-left::after {
+  right: -7px;
+  top: var(--click-guide-arrow-y);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .click-guide-eyebrow {
@@ -101,6 +129,10 @@
 #click-guide-popup.click-guide-compact {
   width: auto;
   min-width: 224px;
+}
+
+#click-guide-popup.click-guide-missing::after {
+  display: none;
 }
 
 .click-guide-count {
@@ -180,4 +212,39 @@
   padding: 6px 11px;
   border-radius: 4px;
   pointer-events: none;
+}
+
+@keyframes click-guide-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes click-guide-target-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes click-guide-popup-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #click-guide-dim-layer,
+  .click-guide-target-highlight,
+  #click-guide-popup {
+    animation: none;
+  }
 }
