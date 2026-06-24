@@ -23,6 +23,7 @@
   let repositionRaf = null;
   let urlWatchTimer = null;
   let selectionToastTimer = null;
+  let celebrationTimer = null;
 
   function safeStorage(fn) {
     try {
@@ -340,7 +341,9 @@
     clearHover();
     if (overlayLayer) overlayLayer.innerHTML = "";
     if (urlWatchTimer) clearInterval(urlWatchTimer);
+    if (celebrationTimer) clearTimeout(celebrationTimer);
     urlWatchTimer = null;
+    celebrationTimer = null;
   }
 
   function preparePlaybackLayer(layer, dimPage) {
@@ -575,6 +578,27 @@
     });
   }
 
+  function showCompletionCelebration() {
+    mode = "idle";
+    activePlayback = null;
+    if (urlWatchTimer) clearInterval(urlWatchTimer);
+    urlWatchTimer = null;
+    const layer = ensureOverlayLayer();
+    layer.innerHTML = "";
+    const celebration = document.createElement("div");
+    celebration.id = "click-guide-celebration";
+    celebration.setAttribute("role", "status");
+    celebration.innerHTML = `
+      <div class="click-guide-celebration-burst" aria-hidden="true">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <strong>Guide complete</strong>
+      <span>Nice work.</span>
+    `;
+    layer.append(celebration);
+    celebrationTimer = setTimeout(clearOverlay, 2400);
+  }
+
   async function renderPlaybackStep() {
     if (!activePlayback) return;
     const { guide, stepIndex } = activePlayback;
@@ -698,7 +722,7 @@
   function goToStep(stepIndex) {
     if (!activePlayback) return;
     if (stepIndex < 0) return;
-    if (stepIndex >= activePlayback.guide.steps.length) return stopPlayback();
+    if (stepIndex >= activePlayback.guide.steps.length) return showCompletionCelebration();
     const nextStep = activePlayback.guide.steps[stepIndex];
     const nextPage = nextStep?.pageUrl || activePlayback.guide.startUrl;
     const safeNextPage = normalizeGuideUrl(nextPage);
