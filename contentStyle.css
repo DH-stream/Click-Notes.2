@@ -24,13 +24,13 @@
 
 .click-guide-target-highlight {
   position: absolute;
-  border: 2px solid #7dd3fc;
+  border: 2px solid #38bdf8;
   border-radius: 8px;
-  background: rgba(125, 211, 252, 0.16);
+  background: rgba(56, 189, 248, 0.18);
   box-shadow:
-    0 0 0 3px rgba(14, 165, 233, 0.34),
-    0 0 0 8px rgba(20, 184, 166, 0.16),
-    0 0 28px rgba(125, 211, 252, 0.58),
+    0 0 0 3px rgba(14, 165, 233, 0.46),
+    0 0 0 9px rgba(20, 184, 166, 0.22),
+    0 0 34px rgba(56, 189, 248, 0.72),
     0 18px 44px rgba(15, 23, 42, 0.44);
   box-sizing: border-box;
   pointer-events: none;
