@@ -35,19 +35,19 @@
   <style>
     :root {
       color-scheme: light;
-      --ink: #172033;
-      --muted: #667085;
-      --line: #d7dde8;
-      --paper: #f6f8fb;
+      --ink: #1c1b1b;
+      --muted: #424752;
+      --line: #c2c6d4;
+      --paper: #fcf9f8;
       --panel: #ffffff;
-      --accent-soft: #e8eefc;
-      --accent-ink: #1d4ed8;
-      --gradient-start: #eef5ff;
-      --gradient-mid: #f7fbff;
-      --gradient-end: #edf7f4;
-      --success-soft: #e6f4ef;
-      --success-ink: #0f766e;
-      --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
+      --accent-soft: #d6e3ff;
+      --accent-ink: #00488d;
+      --gradient-start: #fcf9f8;
+      --gradient-mid: #f6f3f2;
+      --gradient-end: #eae7e7;
+      --success-soft: rgba(0, 112, 6, 0.1);
+      --success-ink: #005503;
+      --shadow: 0 18px 50px rgba(0, 72, 141, 0.1);
     }
 
     * { box-sizing: border-box; }
@@ -56,11 +56,11 @@
       margin: 0;
       min-height: 150vh;
       background:
-        linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px),
-        linear-gradient(rgba(29, 78, 216, 0.04) 1px, transparent 1px),
-        radial-gradient(circle at 18% 12%, rgba(29, 78, 216, 0.18), transparent 34%),
-        radial-gradient(circle at 88% 4%, rgba(20, 184, 166, 0.14), transparent 30%),
-        linear-gradient(135deg, var(--gradient-start), var(--gradient-mid) 46%, var(--gradient-end)),
+        linear-gradient(90deg, rgba(0, 72, 141, 0.045) 1px, transparent 1px),
+        linear-gradient(rgba(0, 72, 141, 0.035) 1px, transparent 1px),
+        radial-gradient(circle at 18% 12%, rgba(0, 95, 184, 0.18), transparent 34%),
+        radial-gradient(circle at 88% 4%, rgba(168, 200, 255, 0.28), transparent 30%),
+        linear-gradient(135deg, var(--gradient-start), var(--gradient-mid) 48%, var(--gradient-end)),
         var(--paper);
       background-size: 36px 36px, 36px 36px, auto, auto, auto, auto;
       color: var(--ink);
@@ -92,7 +92,7 @@
       width: 30px;
       height: 30px;
       border-radius: 8px;
-      background: var(--ink);
+      background: var(--accent-ink);
       color: white;
       display: grid;
       place-items: center;
@@ -111,7 +111,7 @@
     .icon-action {
       border: 1px solid var(--line);
       border-radius: 7px;
-      background: var(--panel);
+      background: rgba(255, 255, 255, 0.78);
       color: var(--ink);
       padding: 9px 12px;
       font: inherit;
@@ -135,10 +135,12 @@
     }
 
     .workspace {
-      background: rgba(255, 255, 255, 0.78);
-      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(194, 198, 212, 0.68);
       border-radius: 8px;
       box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       overflow: hidden;
     }
 
@@ -148,23 +150,23 @@
       gap: 8px;
       padding: 10px 12px;
       border-bottom: 1px solid var(--line);
-      background: #eef2f7;
+      background: #f6f3f2;
     }
 
     .dot {
       width: 10px;
       height: 10px;
       border-radius: 50%;
-      background: #cbd5e1;
+      background: #c2c6d4;
     }
 
-    .dot:nth-child(2) { background: #94a3b8; }
-    .dot:nth-child(3) { background: #64748b; }
+    .dot:nth-child(2) { background: #a8c8ff; }
+    .dot:nth-child(3) { background: #005fb8; }
 
     .address {
       margin-left: 8px;
       flex: 1;
-      border: 1px solid #cbd5e1;
+      border: 1px solid var(--line);
       border-radius: 6px;
       background: #fff;
       color: var(--muted);
@@ -213,7 +215,7 @@
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
-      box-shadow: 0 14px 32px rgba(20, 20, 18, 0.08);
+      box-shadow: 0 14px 32px rgba(0, 72, 141, 0.08);
       overflow: hidden;
     }
 
@@ -236,8 +238,8 @@
       min-height: 92px;
       border-radius: 8px;
       padding: 14px;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
+      background: #f6f3f2;
+      border: 1px solid #e5e2e1;
     }
 
     .metric strong {
@@ -271,25 +273,27 @@
 
     .primary-action {
       margin-top: 20px;
-      background: var(--ink);
+      background: var(--accent-ink);
       color: #fff;
-      border-color: var(--ink);
+      border-color: var(--accent-ink);
     }
 
     .secondary-action {
       margin-top: 20px;
       margin-left: 8px;
-      background: #fff;
+      background: rgba(255, 255, 255, 0.78);
     }
 
     .guide-panel {
       position: sticky;
       top: 18px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(194, 198, 212, 0.68);
       border-radius: 8px;
-      background: #101827;
-      color: #f3f3f3;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--ink);
       box-shadow: var(--shadow);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       overflow: hidden;
     }
 
@@ -298,14 +302,14 @@
       align-items: center;
       gap: 8px;
       padding: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid var(--line);
     }
 
     .guide-panel .status-light {
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: #14b8a6;
+      background: #005fb8;
     }
 
     .guide-panel h2 {
@@ -313,12 +317,12 @@
       font-size: 12px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #bdbdbd;
+      color: var(--accent-ink);
     }
 
     .guide-panel section {
       padding: 12px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: 1px solid var(--line);
     }
 
     .guide-row {
@@ -329,7 +333,7 @@
       font-size: 13px;
     }
 
-    .guide-row span:last-child { color: #8e8e8e; }
+    .guide-row span:last-child { color: var(--muted); }
 
     .step-list {
       display: grid;
@@ -337,16 +341,16 @@
     }
 
     .step-pill {
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      border: 1px solid #e5e2e1;
       border-radius: 6px;
       padding: 9px;
-      background: #172033;
+      background: #f6f3f2;
       font-size: 12px;
     }
 
     .step-pill.active {
       background: var(--accent-soft);
-      color: #172033;
+      color: #001b3d;
     }
 
     .deep-section {
@@ -368,7 +372,7 @@
     .handoff-card {
       background: var(--success-soft);
       color: var(--success-ink);
-      border-color: #b7ddd2;
+      border-color: rgba(0, 112, 6, 0.22);
     }
 
     .checklist-card ul {
