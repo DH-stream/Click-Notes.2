@@ -23,6 +23,14 @@ It helps an experienced colleague turn a web workflow into a calm visual guide: 
 
 No backend, account, or build step is required.
 
+## Quick Preview
+
+Open `smoke/preview.html` to show an auto-playing Click Guide demo without installing the extension or creating a saved tutorial.
+
+![Click Guide preview](smoke/preview.png)
+
+If the browser blocks local scripts, serve the repo locally and open `http://127.0.0.1:<port>/smoke/preview.html`.
+
 ## Create And Play A Guide
 
 1. Open a website or local smoke page.
