@@ -42,6 +42,9 @@
       --panel: #ffffff;
       --accent-soft: #e8eefc;
       --accent-ink: #1d4ed8;
+      --gradient-start: #eef5ff;
+      --gradient-mid: #f7fbff;
+      --gradient-end: #edf7f4;
       --success-soft: #e6f4ef;
       --success-ink: #0f766e;
       --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
@@ -55,6 +58,9 @@
       background:
         linear-gradient(90deg, rgba(29, 78, 216, 0.05) 1px, transparent 1px),
         linear-gradient(rgba(29, 78, 216, 0.04) 1px, transparent 1px),
+        radial-gradient(circle at 18% 12%, rgba(29, 78, 216, 0.18), transparent 34%),
+        radial-gradient(circle at 88% 4%, rgba(20, 184, 166, 0.14), transparent 30%),
+        linear-gradient(135deg, var(--gradient-start), var(--gradient-mid) 46%, var(--gradient-end)),
         var(--paper);
       background-size: 36px 36px;
       color: var(--ink);
