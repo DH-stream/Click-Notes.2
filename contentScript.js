@@ -343,6 +343,15 @@
     urlWatchTimer = null;
   }
 
+  function preparePlaybackLayer(layer, dimPage) {
+    const existingDimLayer = layer.querySelector("#click-guide-dim-layer");
+    if (dimPage && !existingDimLayer) {
+      layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
+    }
+    if (!dimPage && existingDimLayer) existingDimLayer.remove();
+    layer.querySelectorAll(".click-guide-target-highlight, #click-guide-popup").forEach((item) => item.remove());
+  }
+
   function hideSelectionToast() {
     if (selectionToastTimer) clearTimeout(selectionToastTimer);
     selectionToastTimer = null;
@@ -578,13 +587,10 @@
     }
 
     const layer = ensureOverlayLayer();
-    layer.innerHTML = "";
     const rect = resolvedTarget.element
       ? resolvedTarget.element.getBoundingClientRect()
       : getFallbackRect(step);
-    if (step.playback?.dimPage) {
-      layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
-    }
+    preparePlaybackLayer(layer, Boolean(step.playback?.dimPage));
     if (step.playback?.highlightTarget !== false) {
       const highlight = document.createElement("div");
       highlight.className = "click-guide-target-highlight";
