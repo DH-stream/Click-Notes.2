@@ -5,6 +5,7 @@ const panel = document.getElementById("panel");
 const {
   createGuide,
   createStep,
+  normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
   prepareImportedGuide,
@@ -57,7 +58,7 @@ async function ensureInjected(tabId) {
 
 async function loadGuides() {
   const { guides } = await chrome.storage.local.get({ guides: [] });
-  state.guides = Array.isArray(guides) ? guides : [];
+  state.guides = Array.isArray(guides) ? guides.map(normalizeGuide) : [];
 }
 
 async function saveGuides() {
@@ -77,6 +78,11 @@ function updateGuide(guide) {
   guide.updatedAt = new Date().toISOString();
   guide.steps = guide.steps.map(normalizeStep);
   state.guides = state.guides.map((item) => (item.id === guide.id ? guide : item));
+}
+
+function safeGuideUrl(value) {
+  const normalized = normalizeGuideUrl(value || "");
+  return normalized || "";
 }
 
 function button(label, onClick, className = "") {
@@ -231,14 +237,17 @@ function renderStepEditor() {
     weakHint,
     field("Title", title),
     field("Body / instruction", body),
-    checkbox("showPopup", "Show instruction text", step.playback?.showPopup !== false),
+    checkbox(
+      "showInstructionText",
+      "Show instruction text",
+      (step.playback?.showInstructionText ?? step.playback?.showPopup) !== false,
+    ),
     checkbox("highlightTarget", "Highlight target", step.playback?.highlightTarget !== false),
     checkbox("autoScroll", "Scroll automatically to element", step.playback?.autoScroll !== false),
     checkbox("dimPage", "Dim rest of page", step.playback?.dimPage !== false),
     field("Popup placement", placement),
     field("Advance", advanceMode),
     field("Advance value", advanceValue),
-    checkbox("allowManualFallback", "Allow manual fallback", step.advance?.allowManualFallback !== false),
   ]));
 }
 
@@ -281,9 +290,10 @@ async function playGuide(guideId) {
   if (!guide) return;
   let tab = await getActiveTab();
   if (!tab?.id) return;
-  const firstPageUrl = guide.steps?.[0]?.pageUrl || guide.startUrl;
-  if (normalizeGuideUrl(tab.url || "") !== normalizeGuideUrl(firstPageUrl)) {
-    await chrome.tabs.update(tab.id, { url: firstPageUrl });
+  const safeFirstPageUrl = safeGuideUrl(guide.startUrl);
+  if (!safeFirstPageUrl) return setStatus("Guide has no safe start URL");
+  if (normalizeGuideUrl(tab.url || "") !== safeFirstPageUrl) {
+    await chrome.tabs.update(tab.id, { url: safeFirstPageUrl });
     await waitForTabComplete(tab.id);
     tab = await getActiveTab();
   }
@@ -316,7 +326,8 @@ function waitForTabComplete(tabId) {
 async function exportGuide(guideId) {
   const guide = state.guides.find((item) => item.id === guideId);
   if (!guide) return;
-  const blob = new Blob([JSON.stringify(guide, null, 2)], { type: "application/json" });
+  const exportableGuide = { ...guide, schemaVersion: guide.schemaVersion || 1 };
+  const blob = new Blob([JSON.stringify(exportableGuide, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -336,8 +347,8 @@ async function handleImport(file) {
     setStatus("Guide imported");
     render();
     await playGuide(imported.id);
-  } catch {
-    setStatus("Import failed");
+  } catch (error) {
+    setStatus(error?.message || "Import failed");
   } finally {
     importFile.value = "";
   }
@@ -368,12 +379,14 @@ async function deleteStep(guideId, stepId) {
 async function saveStepFromForm(step) {
   const guide = activeGuide();
   if (!guide) return;
+  const showInstructionText = document.getElementById("showInstructionText").checked;
   const saved = {
     ...step,
     title: document.getElementById("stepTitle").value.trim() || "Untitled step",
     body: document.getElementById("stepBody").value.trim(),
     playback: {
-      showPopup: document.getElementById("showPopup").checked,
+      showInstructionText,
+      showPopup: showInstructionText,
       highlightTarget: document.getElementById("highlightTarget").checked,
       dimPage: document.getElementById("dimPage").checked,
       autoScroll: document.getElementById("autoScroll").checked,
@@ -382,7 +395,7 @@ async function saveStepFromForm(step) {
     advance: {
       mode: document.getElementById("advanceMode").value,
       value: document.getElementById("advanceValue").value.trim(),
-      allowManualFallback: document.getElementById("allowManualFallback").checked,
+      allowManualFallback: true,
     },
   };
   const existingIndex = guide.steps.findIndex((item) => item.id === saved.id);
@@ -422,6 +435,11 @@ async function consumePendingSelection() {
     updateGuide(guide);
     await saveGuides();
   } else {
+    if (pendingGuideEdit.stepId) {
+      state.view = "editor";
+      setStatus("Step no longer exists");
+      return;
+    }
     const step = createStep(selectedGuideTarget);
     state.pendingTarget = step.target;
     state.editingStepId = step.id;
