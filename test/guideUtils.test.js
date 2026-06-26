@@ -5,6 +5,8 @@ const {
   createGuide,
   createBuilderResumeSession,
   createStep,
+  deriveSafeUrlMatch,
+  matchesAdvanceUrl,
   normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
@@ -12,6 +14,44 @@ const {
   shouldResumeBuilderSession,
   upsertGuideStep,
 } = require("../guideUtils.js");
+
+test("deriveSafeUrlMatch strips query params and hashes", () => {
+  assert.equal(
+    deriveSafeUrlMatch("https://example.com/dashboard?token=abc#x"),
+    "/dashboard",
+  );
+  assert.equal(
+    deriveSafeUrlMatch("/checkout/confirm?session=abc", "https://example.com/cart"),
+    "/checkout/confirm",
+  );
+});
+
+test("deriveSafeUrlMatch rejects unsafe protocols", () => {
+  for (const value of [
+    "javascript:alert(1)",
+    "data:text/html,hello",
+    "blob:https://example.com/id",
+    "chrome://extensions",
+    "chrome-extension://abc/page.html",
+  ]) {
+    assert.equal(deriveSafeUrlMatch(value), "");
+  }
+});
+
+test("deriveSafeUrlMatch accepts safe path-only values", () => {
+  assert.equal(deriveSafeUrlMatch("/dashboard"), "/dashboard");
+  assert.equal(deriveSafeUrlMatch("/dashboard?token=secret#panel"), "/dashboard");
+});
+
+test("matchesAdvanceUrl matches normalized full URLs and paths", () => {
+  const current = "https://example.com/dashboard?token=secret#panel";
+
+  assert.equal(matchesAdvanceUrl(current, "https://example.com/dashboard"), true);
+  assert.equal(matchesAdvanceUrl(current, "/dashboard"), true);
+  assert.equal(matchesAdvanceUrl(current, "dashboard"), true);
+  assert.equal(matchesAdvanceUrl(current, "/dash"), false);
+  assert.equal(matchesAdvanceUrl(current, "javascript:alert(1)"), false);
+});
 
 test("normalizeGuideUrl strips query params and hashes", () => {
   assert.equal(
@@ -373,6 +413,53 @@ test("upsertGuideStep retargets an existing step without changing its id", () =>
   assert.equal(updated.steps[0].pageUrl, "https://example.com/new");
 });
 
+test("upsertGuideStep auto-configures URL matching for a safe link target", () => {
+  const guide = createGuide("Links", "https://example.com/start");
+  const target = {
+    selector: "#dashboard-link",
+    href: "https://example.com/dashboard?token=secret#overview",
+    pageUrl: "https://example.com/start",
+  };
+
+  const updated = upsertGuideStep(guide, target, "", { title: "Open dashboard" });
+
+  assert.equal(updated.steps[0].advance.mode, "urlMatch");
+  assert.equal(updated.steps[0].advance.value, "/dashboard");
+  assert.equal(updated.steps[0].advance.allowManualFallback, true);
+});
+
+test("upsertGuideStep keeps manual completion when no safe link exists", () => {
+  const guide = createGuide("Buttons", "https://example.com/start");
+
+  const updated = upsertGuideStep(
+    guide,
+    { selector: "#save", pageUrl: "https://example.com/start" },
+    "",
+    { title: "Save" },
+  );
+
+  assert.equal(updated.steps[0].advance.mode, "manual");
+  assert.equal(updated.steps[0].advance.value, "");
+});
+
+test("upsertGuideStep preserves an explicitly manual safe link", () => {
+  const guide = createGuide("Links", "https://example.com/start");
+
+  const updated = upsertGuideStep(
+    guide,
+    {
+      selector: "#dashboard-link",
+      href: "https://example.com/dashboard?token=secret",
+      pageUrl: "https://example.com/start",
+    },
+    "",
+    { title: "Open dashboard", advanceMode: "manual" },
+  );
+
+  assert.equal(updated.steps[0].advance.mode, "manual");
+  assert.equal(updated.steps[0].advance.value, "");
+});
+
 test("createBuilderResumeSession stores URL-match builder continuation", () => {
   const session = createBuilderResumeSession("guide-local", {
     advanceMode: "urlMatch",
@@ -384,6 +471,22 @@ test("createBuilderResumeSession stores URL-match builder continuation", () => {
   assert.equal(session.waitForUrl, "checkout/confirm");
   assert.equal(session.tabId, 12);
   assert.match(session.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("createBuilderResumeSession stores only a safe URL-match value", () => {
+  const session = createBuilderResumeSession("guide-local", {
+    advanceMode: "urlMatch",
+    advanceValue: "https://example.com/checkout/confirm?session=secret#done",
+  });
+
+  assert.equal(session.waitForUrl, "/checkout/confirm");
+  assert.equal(
+    createBuilderResumeSession("guide-local", {
+      advanceMode: "urlMatch",
+      advanceValue: "javascript:alert(1)",
+    }),
+    null,
+  );
 });
 
 test("createBuilderResumeSession ignores non URL-match steps", () => {

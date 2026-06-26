@@ -22,6 +22,53 @@
     }
   }
 
+  function deriveSafeUrlMatch(value, baseUrl = "") {
+    const raw = textSnippet(value, 500);
+    if (!raw || /^\/\//.test(raw)) return "";
+    if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+      try {
+        const url = new URL(raw);
+        if (!["http:", "https:", "file:"].includes(url.protocol)) return "";
+        if (url.protocol === "file:") return `file://${url.pathname}`.slice(0, 500);
+        return (url.pathname || "/").slice(0, 500);
+      } catch {
+        return "";
+      }
+    }
+    if (baseUrl) {
+      try {
+        const url = new URL(raw, baseUrl);
+        if (!["http:", "https:", "file:"].includes(url.protocol)) return "";
+        if (url.protocol === "file:") return `file://${url.pathname}`.slice(0, 500);
+        return (url.pathname || "/").slice(0, 500);
+      } catch {}
+    }
+    const withoutSensitiveParts = raw.split(/[?#]/, 1)[0];
+    if (!withoutSensitiveParts || !/^[a-zA-Z0-9._~!$&'()*+,;=:@%/-]+$/.test(withoutSensitiveParts)) {
+      return "";
+    }
+    return withoutSensitiveParts.slice(0, 500);
+  }
+
+  function matchesAdvanceUrl(currentUrl, advanceValue) {
+    const currentFull = normalizeGuideUrl(currentUrl);
+    if (!currentFull) return false;
+    const rawAdvance = textSnippet(advanceValue, 500);
+    const safeAdvance = deriveSafeUrlMatch(rawAdvance);
+    if (!safeAdvance) return false;
+    try {
+      if (/^(https?|file):/i.test(rawAdvance) && normalizeGuideUrl(rawAdvance) === currentFull) {
+        return true;
+      }
+      const current = new URL(currentFull);
+      if (safeAdvance.startsWith("file://")) return currentFull === safeAdvance;
+      if (safeAdvance.startsWith("/")) return current.pathname === safeAdvance;
+      return current.pathname.includes(safeAdvance) || currentFull.includes(safeAdvance);
+    } catch {
+      return false;
+    }
+  }
+
   function nowIso() {
     return new Date().toISOString();
   }
@@ -87,6 +134,7 @@
     const showInstructionText =
       step?.playback?.showInstructionText ?? step?.playback?.showPopup;
     const fallbackTagName = String(target.fallbackTagName || "").trim().toLowerCase();
+    const advanceMode = normalizeAdvanceMode(step?.advance?.mode);
     return {
       id: normalizeEntityId(step?.id, "step"),
       order: index + 1,
@@ -121,8 +169,11 @@
         popupPlacement: normalizePlacement(step?.playback?.popupPlacement),
       },
       advance: {
-        mode: normalizeAdvanceMode(step?.advance?.mode),
-        value: textSnippet(step?.advance?.value, 500),
+        mode: advanceMode,
+        value:
+          advanceMode === "urlMatch"
+            ? deriveSafeUrlMatch(step?.advance?.value)
+            : textSnippet(step?.advance?.value, 500),
         allowManualFallback: step?.advance?.allowManualFallback !== false,
       },
     };
@@ -211,6 +262,25 @@
       : -1;
     const existing = existingIndex >= 0 ? normalizedGuide.steps[existingIndex] : createStep(target);
     const nextTarget = target || existing.target;
+    const safeLinkMatch = deriveSafeUrlMatch(
+      nextTarget?.href,
+      nextTarget?.pageUrl || normalizedGuide.startUrl,
+    );
+    const shouldAutoMatchLink =
+      fields.advanceMode === undefined &&
+      existing.advance?.mode === "manual" &&
+      Boolean(safeLinkMatch);
+    const advanceMode = shouldAutoMatchLink
+      ? "urlMatch"
+      : fields.advanceMode !== undefined
+        ? fields.advanceMode
+        : existing.advance?.mode;
+    const advanceValue =
+      fields.advanceValue !== undefined
+        ? fields.advanceValue
+        : shouldAutoMatchLink || (advanceMode === "urlMatch" && !existing.advance?.value)
+          ? safeLinkMatch
+          : existing.advance?.value;
     const showInstructionText = booleanField(
       fields.showInstructionText,
       existing.playback?.showInstructionText ?? existing.playback?.showPopup,
@@ -238,11 +308,8 @@
             : existing.playback?.popupPlacement,
       },
       advance: {
-        mode:
-          fields.advanceMode !== undefined
-            ? fields.advanceMode
-            : existing.advance?.mode,
-        value: stringField(fields.advanceValue, existing.advance?.value),
+        mode: advanceMode,
+        value: advanceValue,
         allowManualFallback: true,
       },
     };
@@ -259,7 +326,7 @@
 
   function createBuilderResumeSession(guideId, fields = {}) {
     const mode = normalizeAdvanceMode(fields.advanceMode);
-    const waitForUrl = textSnippet(fields.advanceValue, 500);
+    const waitForUrl = deriveSafeUrlMatch(fields.advanceValue);
     const normalizedGuideId = String(guideId || "").trim();
     if (mode !== "urlMatch" || !waitForUrl || !/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedGuideId)) {
       return null;
@@ -275,7 +342,7 @@
 
   function shouldResumeBuilderSession(session, currentUrl) {
     if (!session?.guideId || !session?.waitForUrl) return false;
-    return String(currentUrl || "").includes(String(session.waitForUrl));
+    return matchesAdvanceUrl(currentUrl, session.waitForUrl);
   }
 
   function stringField(value, fallback = "") {
@@ -350,7 +417,9 @@
     createGuide,
     createBuilderResumeSession,
     createStep,
+    deriveSafeUrlMatch,
     makeId,
+    matchesAdvanceUrl,
     normalizeGuide,
     normalizeGuideUrl,
     normalizeStep,
