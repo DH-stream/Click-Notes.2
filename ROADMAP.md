@@ -233,6 +233,117 @@ Acceptance:
 - No sensitive URL data is saved.
 - Builder does not get stuck if navigation does not happen.
 
+## Future – Desktop application for internal software
+
+Long-term, Click Guide should be able to guide users outside the browser.
+
+The desktop version would allow companies to create guides for internal programs, legacy tools, ERP systems, TMS systems, finance tools, and other native desktop applications.
+
+The product principle stays the same:
+
+- Expert selects a target.
+- Expert writes the instruction.
+- Learner sees a step-by-step overlay.
+- Click Guide highlights the right area/control.
+- User performs the action manually.
+- Click Guide detects progress when possible.
+
+This should not become automation or remote control. It should remain visual guidance.
+
+Possible desktop target metadata:
+
+- app/process name
+- window title
+- accessibility role/control type
+- accessible name
+- visible text
+- screen position/rect
+- monitor/display info
+- OCR fallback
+- image/template fallback
+- previous/next window state
+- optional URL/path/state if the desktop app exposes it
+
+Potential technologies to evaluate later:
+
+- Electron or Tauri for the desktop shell
+- Windows UI Automation / Accessibility APIs
+- macOS Accessibility APIs
+- screen overlay window
+- OCR for legacy apps
+- signed installer and enterprise deployment
+
+Important constraints:
+
+- Do not build this until the browser MVP is reliable.
+- Keep desktop as a separate product surface.
+- Preserve privacy/safety principles.
+- Do not capture passwords or sensitive field values.
+- Do not automate actions unless explicitly designed and reviewed much later.
+
+## Future – Licensing and plan limits
+
+Click Guide may later support plan-based licensing.
+
+Potential tiers:
+
+### Click Guide Solo
+
+Buy once. Create local guides.
+
+- 1 user
+- local guides
+- no account required
+- export/import
+- limited guide count
+
+### Click Guide Team
+
+Subscription. Share and manage guides.
+
+- small team workspace
+- limited number of users/seats
+- shared guide library
+- more guides
+- basic roles
+- simple team management
+
+### Click Guide Business
+
+Subscription. Scale guides across company.
+
+- company workspace
+- per-seat or user-based licensing
+- admin controls
+- advanced roles
+- higher or unlimited guide limits
+- company-bound guides
+- license/workspace validation before playback
+- domain restrictions
+- signed guide files or server-verified guide access
+- future desktop support
+
+Business guides may later require the correct license, company, or workspace to play.
+
+Example future guide metadata:
+
+```js
+license: {
+  requiredPlan: "business",
+  workspaceId: "company_123",
+  companyName: "Example Logistics",
+  allowedDomains: ["example.com", "internal.example.com"],
+  signature: "..."
+}
+```
+
+Important:
+
+- Client-side checks alone are not strong licensing.
+- Business licensing should eventually use server-side verification and/or signed guide metadata.
+- Do not build licensing yet.
+- For now, preserve the ability to add plan, workspaceId, license state, guide ownership, guide limits, and user/seat limits later without rewriting the core guide model.
+
 ## Manual smoke scenarios
 
 Before considering the roadmap items done, smoke test these flows:
