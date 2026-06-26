@@ -204,6 +204,93 @@
     });
   }
 
+  function upsertGuideStep(guide, target, stepId = "", fields = {}) {
+    const normalizedGuide = normalizeGuide(guide);
+    const existingIndex = stepId
+      ? normalizedGuide.steps.findIndex((step) => step.id === stepId)
+      : -1;
+    const existing = existingIndex >= 0 ? normalizedGuide.steps[existingIndex] : createStep(target);
+    const nextTarget = target || existing.target;
+    const showInstructionText = booleanField(
+      fields.showInstructionText,
+      existing.playback?.showInstructionText ?? existing.playback?.showPopup,
+      true,
+    );
+    const rawStep = {
+      ...existing,
+      title: stringField(fields.title, existing.title) || "Untitled step",
+      body: stringField(fields.body, existing.body),
+      pageUrl: nextTarget?.pageUrl || existing.pageUrl || "",
+      target: nextTarget,
+      playback: {
+        showInstructionText,
+        showPopup: showInstructionText,
+        highlightTarget: booleanField(
+          fields.highlightTarget,
+          existing.playback?.highlightTarget,
+          true,
+        ),
+        dimPage: booleanField(fields.dimPage, existing.playback?.dimPage, true),
+        autoScroll: booleanField(fields.autoScroll, existing.playback?.autoScroll, true),
+        popupPlacement:
+          fields.popupPlacement !== undefined
+            ? fields.popupPlacement
+            : existing.playback?.popupPlacement,
+      },
+      advance: {
+        mode:
+          fields.advanceMode !== undefined
+            ? fields.advanceMode
+            : existing.advance?.mode,
+        value: stringField(fields.advanceValue, existing.advance?.value),
+        allowManualFallback: true,
+      },
+    };
+    const step = normalizeStep(
+      rawStep,
+      existingIndex >= 0 ? existingIndex : normalizedGuide.steps.length,
+    );
+    if (existingIndex >= 0) normalizedGuide.steps[existingIndex] = step;
+    else normalizedGuide.steps.push(step);
+    normalizedGuide.updatedAt = nowIso();
+    normalizedGuide.steps = normalizeSteps(normalizedGuide.steps);
+    return normalizedGuide;
+  }
+
+  function createBuilderResumeSession(guideId, fields = {}) {
+    const mode = normalizeAdvanceMode(fields.advanceMode);
+    const waitForUrl = textSnippet(fields.advanceValue, 500);
+    const normalizedGuideId = String(guideId || "").trim();
+    if (mode !== "urlMatch" || !waitForUrl || !/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedGuideId)) {
+      return null;
+    }
+    const session = {
+      guideId: normalizedGuideId,
+      waitForUrl,
+      createdAt: nowIso(),
+    };
+    if (Number.isInteger(fields.tabId)) session.tabId = fields.tabId;
+    return session;
+  }
+
+  function shouldResumeBuilderSession(session, currentUrl) {
+    if (!session?.guideId || !session?.waitForUrl) return false;
+    return String(currentUrl || "").includes(String(session.waitForUrl));
+  }
+
+  function stringField(value, fallback = "") {
+    if (value === undefined || value === null) return textSnippet(fallback, 2000);
+    return String(value).replace(/\s+/g, " ").trim();
+  }
+
+  function booleanField(value, fallback, defaultValue) {
+    if (value === undefined || value === null) {
+      if (fallback === undefined || fallback === null) return defaultValue;
+      return fallback !== false;
+    }
+    return value !== false;
+  }
+
   function stepHasTargetOrAnchor(step) {
     const target = step?.target || {};
     const rect = target.rect || {};
@@ -261,11 +348,14 @@
 
   return {
     createGuide,
+    createBuilderResumeSession,
     createStep,
     makeId,
     normalizeGuide,
     normalizeGuideUrl,
     normalizeStep,
     prepareImportedGuide,
+    shouldResumeBuilderSession,
+    upsertGuideStep,
   };
 });

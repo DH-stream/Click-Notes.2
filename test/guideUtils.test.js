@@ -3,11 +3,14 @@ const assert = require("node:assert/strict");
 
 const {
   createGuide,
+  createBuilderResumeSession,
   createStep,
   normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
   prepareImportedGuide,
+  shouldResumeBuilderSession,
+  upsertGuideStep,
 } = require("../guideUtils.js");
 
 test("normalizeGuideUrl strips query params and hashes", () => {
@@ -312,4 +315,101 @@ test("normalizeGuide dedupes existing local step ids", () => {
 
   assert.equal(normalized.steps[0].id, "step-duplicate");
   assert.notEqual(normalized.steps[1].id, "step-duplicate");
+});
+
+test("upsertGuideStep appends a selected target with inline edit fields", () => {
+  const guide = createGuide("Inline", "https://example.com");
+  const target = {
+    selector: "#start",
+    selectorConfidence: "medium",
+    pageUrl: "https://example.com/path?draft=1",
+  };
+
+  const updated = upsertGuideStep(guide, target, "", {
+    title: " Click here ",
+    body: " Then continue ",
+    showInstructionText: false,
+    highlightTarget: true,
+    dimPage: false,
+    autoScroll: true,
+    popupPlacement: "left",
+    advanceMode: "urlMatch",
+    advanceValue: "/done",
+  });
+
+  assert.equal(updated.steps.length, 1);
+  assert.match(updated.steps[0].id, /^step-/);
+  assert.equal(updated.steps[0].title, "Click here");
+  assert.equal(updated.steps[0].body, "Then continue");
+  assert.equal(updated.steps[0].target.selector, "#start");
+  assert.equal(updated.steps[0].pageUrl, "https://example.com/path");
+  assert.equal(updated.steps[0].playback.showInstructionText, false);
+  assert.equal(updated.steps[0].playback.showPopup, false);
+  assert.equal(updated.steps[0].playback.dimPage, false);
+  assert.equal(updated.steps[0].playback.popupPlacement, "left");
+  assert.equal(updated.steps[0].advance.mode, "urlMatch");
+  assert.equal(updated.steps[0].advance.value, "/done");
+});
+
+test("upsertGuideStep retargets an existing step without changing its id", () => {
+  const guide = createGuide("Inline", "https://example.com");
+  const original = createStep({ selector: "#old", pageUrl: "https://example.com/old" });
+  original.id = "step-existing";
+  original.title = "Original title";
+  guide.steps.push(original);
+
+  const updated = upsertGuideStep(
+    guide,
+    { selector: "#new", selectorConfidence: "strong", pageUrl: "https://example.com/new" },
+    "step-existing",
+    { title: "Updated", body: "Retargeted" },
+  );
+
+  assert.equal(updated.steps.length, 1);
+  assert.equal(updated.steps[0].id, "step-existing");
+  assert.equal(updated.steps[0].title, "Updated");
+  assert.equal(updated.steps[0].body, "Retargeted");
+  assert.equal(updated.steps[0].target.selector, "#new");
+  assert.equal(updated.steps[0].pageUrl, "https://example.com/new");
+});
+
+test("createBuilderResumeSession stores URL-match builder continuation", () => {
+  const session = createBuilderResumeSession("guide-local", {
+    advanceMode: "urlMatch",
+    advanceValue: "checkout/confirm",
+    tabId: 12,
+  });
+
+  assert.equal(session.guideId, "guide-local");
+  assert.equal(session.waitForUrl, "checkout/confirm");
+  assert.equal(session.tabId, 12);
+  assert.match(session.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("createBuilderResumeSession ignores non URL-match steps", () => {
+  assert.equal(
+    createBuilderResumeSession("guide-local", {
+      advanceMode: "manual",
+      advanceValue: "checkout/confirm",
+    }),
+    null,
+  );
+  assert.equal(
+    createBuilderResumeSession("guide-local", {
+      advanceMode: "urlMatch",
+      advanceValue: " ",
+    }),
+    null,
+  );
+});
+
+test("shouldResumeBuilderSession matches the current URL", () => {
+  const session = {
+    guideId: "guide-local",
+    waitForUrl: "checkout/confirm",
+  };
+
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/checkout/confirm"), true);
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/cart"), false);
+  assert.equal(shouldResumeBuilderSession(null, "https://example.com/checkout/confirm"), false);
 });

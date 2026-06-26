@@ -15,13 +15,18 @@
       return "";
     }
   });
+  const upsertGuideStep = utils.upsertGuideStep;
+  const createBuilderResumeSession = utils.createBuilderResumeSession;
+  const shouldResumeBuilderSession = utils.shouldResumeBuilderSession;
 
   let mode = "idle";
   let hoveredElement = null;
   let overlayLayer = null;
+  let inlineEditor = null;
   let activePlayback = null;
   let repositionRaf = null;
   let urlWatchTimer = null;
+  let builderUrlWatchTimer = null;
   let selectionToastTimer = null;
   let celebrationTimer = null;
 
@@ -33,6 +38,33 @@
       if (e?.message?.includes("Extension context invalidated")) return;
       throw e;
     }
+  }
+
+  async function getLocalStorage(defaults) {
+    if (!chrome?.runtime?.id) return defaults;
+    return chrome.storage.local.get(defaults);
+  }
+
+  async function setLocalStorage(values) {
+    if (!chrome?.runtime?.id) return;
+    await chrome.storage.local.set(values);
+  }
+
+  async function removeLocalStorage(keys) {
+    if (!chrome?.runtime?.id) return;
+    await chrome.storage.local.remove(keys);
+  }
+
+  function clearBuilderUrlWatch() {
+    if (builderUrlWatchTimer) clearInterval(builderUrlWatchTimer);
+    builderUrlWatchTimer = null;
+  }
+
+  function watchBuilderResumeSession() {
+    if (builderUrlWatchTimer) return;
+    builderUrlWatchTimer = setInterval(() => {
+      resumeBuilderSessionIfReady();
+    }, 600);
   }
 
   function escapeCssValue(value) {
@@ -222,6 +254,7 @@
   function isOverlayElement(element) {
     return Boolean(
       element.closest("#click-guide-overlay-layer") ||
+        element.closest("#click-guide-inline-editor") ||
         element.closest("#click-guide-selection-toast"),
     );
   }
@@ -337,8 +370,15 @@
     return overlayLayer;
   }
 
+  function removeInlineEditor() {
+    if (inlineEditor) inlineEditor.remove();
+    inlineEditor = null;
+    document.querySelectorAll(".click-guide-inline-target").forEach((item) => item.remove());
+  }
+
   function clearOverlay() {
     clearHover();
+    removeInlineEditor();
     if (overlayLayer) overlayLayer.innerHTML = "";
     if (urlWatchTimer) clearInterval(urlWatchTimer);
     if (celebrationTimer) clearTimeout(celebrationTimer);
@@ -550,6 +590,272 @@
     );
   }
 
+  function createNode(tag, props = {}, children = []) {
+    const node = document.createElement(tag);
+    Object.entries(props).forEach(([key, value]) => {
+      if (key === "className") node.className = value;
+      else if (key === "textContent") node.textContent = value;
+      else if (key.startsWith("on") && typeof value === "function")
+        node.addEventListener(key.slice(2).toLowerCase(), value);
+      else if (value !== undefined && value !== null) node.setAttribute(key, value);
+    });
+    children.forEach((child) => node.append(child));
+    return node;
+  }
+
+  function createInlineField(labelText, input) {
+    return createNode("label", { className: "click-guide-inline-field" }, [
+      createNode("span", { textContent: labelText }),
+      input,
+    ]);
+  }
+
+  function createInlineCheckbox(name, labelText, checked) {
+    const input = createNode("input", { type: "checkbox", name });
+    input.checked = checked;
+    return createNode("label", { className: "click-guide-inline-check" }, [
+      input,
+      createNode("span", { textContent: labelText }),
+    ]);
+  }
+
+  function createInlineSelect(name, options, selectedValue) {
+    const select = createNode("select", { name });
+    options.forEach((value) => {
+      const option = createNode("option", { value, textContent: value });
+      option.selected = value === selectedValue;
+      select.append(option);
+    });
+    return select;
+  }
+
+  function getAnchorRect(selection, payload) {
+    if (selection.anchorMode === "rect" && payload?.rect) {
+      const left = payload.rect.documentX - window.scrollX;
+      const top = payload.rect.documentY - window.scrollY;
+      const width = Math.max(8, payload.rect.width || 8);
+      const height = Math.max(8, payload.rect.height || 8);
+      return {
+        left,
+        top,
+        right: left + width,
+        bottom: top + height,
+        width,
+        height,
+        documentX: payload.rect.documentX,
+        documentY: payload.rect.documentY,
+      };
+    }
+    const rect = selection.element.getBoundingClientRect();
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: Math.max(8, rect.width),
+      height: Math.max(8, rect.height),
+      documentX: rect.left + window.scrollX,
+      documentY: rect.top + window.scrollY,
+    };
+  }
+
+  function showInlineTargetHighlight(layer, rect) {
+    const highlight = document.createElement("div");
+    highlight.className = "click-guide-target-highlight click-guide-inline-target";
+    highlight.style.left = `${rect.documentX}px`;
+    highlight.style.top = `${rect.documentY}px`;
+    highlight.style.width = `${Math.max(8, rect.width)}px`;
+    highlight.style.height = `${Math.max(8, rect.height)}px`;
+    layer.append(highlight);
+  }
+
+  function renderInlineStepEditor(selection, payload, pendingGuideEdit, guide) {
+    removeInlineEditor();
+    const existing = guide.steps.find((step) => step.id === pendingGuideEdit.stepId);
+    const layer = ensureOverlayLayer();
+    const rect = getAnchorRect(selection, payload);
+    showInlineTargetHighlight(layer, rect);
+
+    const title = createNode("input", {
+      type: "text",
+      name: "title",
+      placeholder: "Step title",
+    });
+    title.value = existing?.title || "";
+    const body = createNode("textarea", {
+      name: "body",
+      placeholder: "Instruction body",
+    });
+    body.value = existing?.body || "";
+    const showInstructionText =
+      (existing?.playback?.showInstructionText ?? existing?.playback?.showPopup) !== false;
+    const placement = createInlineSelect(
+      "popupPlacement",
+      ["auto", "top", "right", "bottom", "left"],
+      existing?.playback?.popupPlacement || "auto",
+    );
+    const advanceMode = createInlineSelect(
+      "advanceMode",
+      ["manual", "urlMatch", "elementVisible"],
+      existing?.advance?.mode || "manual",
+    );
+    const advanceValue = createNode("input", {
+      type: "text",
+      name: "advanceValue",
+      placeholder: "URL contains or selector",
+    });
+    advanceValue.value = existing?.advance?.value || "";
+
+    inlineEditor = createNode("form", { id: "click-guide-inline-editor" }, [
+      createNode("button", {
+        className: "click-guide-close",
+        type: "button",
+        "aria-label": "Close editor",
+        textContent: "x",
+        onClick: cancelInlineStepEditor,
+      }),
+      createNode("div", { className: "click-guide-eyebrow", textContent: "Click Guide" }),
+      createNode("h2", { textContent: existing ? "Edit step" : "New step" }),
+      createInlineField("Title", title),
+      createInlineField("Body", body),
+      createInlineCheckbox("showInstructionText", "Show instruction text", showInstructionText),
+      createInlineCheckbox(
+        "highlightTarget",
+        "Highlight target",
+        existing?.playback?.highlightTarget !== false,
+      ),
+      createInlineCheckbox("autoScroll", "Scroll to element", existing?.playback?.autoScroll !== false),
+      createInlineCheckbox("dimPage", "Dim rest of page", existing?.playback?.dimPage !== false),
+      createInlineField("Popup", placement),
+      createInlineField("Advance", advanceMode),
+      createInlineField("Advance value", advanceValue),
+      createNode("div", { className: "click-guide-actions" }, [
+        createNode("button", {
+          type: "button",
+          "data-action": "close",
+          textContent: "Cancel",
+          onClick: cancelInlineStepEditor,
+        }),
+        createNode("button", {
+          type: "submit",
+          "data-action": "next",
+          textContent: "Save step",
+        }),
+      ]),
+    ]);
+    inlineEditor.addEventListener("click", (event) => event.stopPropagation());
+    inlineEditor.addEventListener("submit", (event) =>
+      saveInlineStepEditor(event, payload, pendingGuideEdit),
+    );
+    layer.append(inlineEditor);
+    positionPopup(inlineEditor, rect, "auto");
+    mode = "editing-step";
+    title.focus({ preventScroll: true });
+  }
+
+  async function saveInlineStepEditor(event, payload, pendingGuideEdit) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!upsertGuideStep) {
+      showSelectionToast("Could not save step. Reload Click Guide and try again.", 5000);
+      return;
+    }
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const fields = {
+      title: formData.get("title"),
+      body: formData.get("body"),
+      showInstructionText: formData.get("showInstructionText") === "on",
+      highlightTarget: formData.get("highlightTarget") === "on",
+      dimPage: formData.get("dimPage") === "on",
+      autoScroll: formData.get("autoScroll") === "on",
+      popupPlacement: formData.get("popupPlacement"),
+      advanceMode: formData.get("advanceMode"),
+      advanceValue: formData.get("advanceValue"),
+      tabId: pendingGuideEdit.tabId,
+    };
+    try {
+      const { guides } = await getLocalStorage({ guides: [] });
+      const nextGuides = Array.isArray(guides) ? guides.slice() : [];
+      const guideIndex = nextGuides.findIndex((item) => item.id === pendingGuideEdit.guideId);
+      if (guideIndex < 0) {
+        showSelectionToast("Guide no longer exists.", 5000);
+        return;
+      }
+      nextGuides[guideIndex] = upsertGuideStep(
+        nextGuides[guideIndex],
+        payload,
+        pendingGuideEdit.stepId,
+        fields,
+      );
+      const builderSession = createBuilderResumeSession
+        ? createBuilderResumeSession(pendingGuideEdit.guideId, fields)
+        : null;
+      await setLocalStorage({
+        guides: nextGuides,
+        ...(builderSession ? { activeBuilderSession: builderSession } : {}),
+      });
+      await removeLocalStorage([
+        "pendingGuideEdit",
+        "selectedGuideTarget",
+        ...(builderSession ? [] : ["activeBuilderSession"]),
+      ]);
+      removeInlineEditor();
+      mode = "idle";
+      if (builderSession) {
+        showSelectionToast("Step saved. Continue to the next page.", 4200);
+        watchBuilderResumeSession();
+        resumeBuilderSessionIfReady();
+      } else {
+        clearBuilderUrlWatch();
+        showSelectionToast("Step saved.", 2400);
+      }
+    } catch {
+      showSelectionToast("Could not save step.", 5000);
+    }
+  }
+
+  async function cancelInlineStepEditor() {
+    removeInlineEditor();
+    mode = "idle";
+    clearBuilderUrlWatch();
+    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
+    hideSelectionToast();
+  }
+
+  async function resumeBuilderSessionIfReady() {
+    if (mode !== "idle" || !shouldResumeBuilderSession) return;
+    try {
+      const { activeBuilderSession, guides } = await getLocalStorage({
+        activeBuilderSession: null,
+        guides: [],
+      });
+      if (!activeBuilderSession) {
+        clearBuilderUrlWatch();
+        return;
+      }
+      if (!shouldResumeBuilderSession(activeBuilderSession, window.location.href)) return;
+      const guide = Array.isArray(guides)
+        ? guides.find((item) => item.id === activeBuilderSession.guideId)
+        : null;
+      if (!guide) {
+        clearBuilderUrlWatch();
+        await removeLocalStorage("activeBuilderSession");
+        return;
+      }
+      clearBuilderUrlWatch();
+      await setLocalStorage({
+        pendingGuideEdit: {
+          guideId: activeBuilderSession.guideId,
+          stepId: "",
+          tabId: activeBuilderSession.tabId,
+        },
+      });
+      await removeLocalStorage(["activeBuilderSession", "selectedGuideTarget"]);
+      startSelectMode("Select the next element for this guide");
+    } catch {}
+  }
+
   function renderMissingStep(step) {
     const layer = ensureOverlayLayer();
     layer.innerHTML = "";
@@ -645,24 +951,27 @@
       popup.innerHTML = compact
         ? `
           <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
-          <div class="click-guide-count"></div>
-          <div class="click-guide-actions">
-            <button type="button" data-action="prev">Previous</button>
+          <div class="click-guide-card-body">
+            <div class="click-guide-count"></div>
+          </div>
+          <div class="click-guide-footer">
+            <button class="click-guide-back-button" type="button" data-action="prev"><span class="click-guide-back-icon">←</span>Previous</button>
             <button type="button" data-action="close">Close guide</button>
-            <button type="button" data-action="next">Next</button>
+            <button type="button" data-action="next">Continue →</button>
           </div>
         `
         : `
           <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
-          <div class="click-guide-eyebrow">Click Guide</div>
-          <h2></h2>
-          <p></p>
-          <div class="click-guide-warning" hidden></div>
-          <div class="click-guide-count"></div>
-          <div class="click-guide-actions">
-            <button type="button" data-action="prev">Previous</button>
+          <div class="click-guide-card-body">
+            <div class="click-guide-count"></div>
+            <h2></h2>
+            <p></p>
+            <div class="click-guide-warning" hidden></div>
+          </div>
+          <div class="click-guide-footer">
+            <button class="click-guide-back-button" type="button" data-action="prev"><span class="click-guide-back-icon">←</span>Previous</button>
             <button type="button" data-action="close">Close guide</button>
-            <button type="button" data-action="next">Next</button>
+            <button type="button" data-action="next">Continue →</button>
           </div>
         `;
       if (!compact) {
@@ -678,7 +987,11 @@
       popup.querySelector('[data-action="prev"]').disabled = stepIndex === 0;
       const nextButton = popup.querySelector('[data-action="next"]');
       nextButton.textContent =
-        stepIndex >= guide.steps.length - 1 ? "Finish" : isAutoAdvance ? "Continue anyway" : "Next";
+        stepIndex >= guide.steps.length - 1
+          ? "Finish"
+          : isAutoAdvance
+            ? "Continue anyway →"
+            : "Continue →";
       layer.append(popup);
       positionPopup(popup, rect, step.playback?.popupPlacement || "auto");
       popup.addEventListener("click", (event) => {
@@ -757,10 +1070,10 @@
     });
   }
 
-  function startSelectMode() {
+  function startSelectMode(message = "Select an element for this guide step") {
     stopPlayback();
     mode = "builder-selecting-target";
-    showSelectionToast("Select an element for this guide step");
+    showSelectionToast(message);
   }
 
   function showSelectionToast(message, durationMs = 0) {
@@ -778,14 +1091,30 @@
     mode = "idle";
     clearHover();
     hideSelectionToast();
-    safeStorage(() => chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]));
+    clearBuilderUrlWatch();
+    safeStorage(() =>
+      chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]),
+    );
   }
 
-  function finishSelectMode(selection, event) {
+  async function finishSelectMode(selection, event) {
     const payload = captureTarget(selection.element, selection.anchorMode, event);
     mode = "idle";
     clearHover();
-    safeStorage(() => chrome.storage.local.set({ selectedGuideTarget: payload }));
+    try {
+      await setLocalStorage({ selectedGuideTarget: payload });
+      const { pendingGuideEdit, guides } = await getLocalStorage({
+        pendingGuideEdit: null,
+        guides: [],
+      });
+      const guide = Array.isArray(guides)
+        ? guides.find((item) => item.id === pendingGuideEdit?.guideId)
+        : null;
+      if (pendingGuideEdit && guide && upsertGuideStep) {
+        renderInlineStepEditor(selection, payload, pendingGuideEdit, guide);
+        return;
+      }
+    } catch {}
     showSelectionToast(
       `${selection.anchorMode === "rect" ? "Visual area" : "Element"} selected. Open Click Guide to write this step.`,
       6000,
@@ -821,6 +1150,10 @@
     (event) => {
       if (event.key === "Escape" && mode === "builder-selecting-target") {
         cancelSelectMode();
+        return;
+      }
+      if (event.key === "Escape" && mode === "editing-step") {
+        cancelInlineStepEditor();
         return;
       }
       if (event.key === "Escape") hideSelectionToast();
@@ -864,4 +1197,9 @@
       renderPlaybackStep();
     }),
   );
+
+  safeStorage(() => {
+    resumeBuilderSessionIfReady();
+    watchBuilderResumeSession();
+  });
 })();

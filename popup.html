@@ -6,28 +6,33 @@
   <title>Click Guide</title>
   <style>
     :root {
-      color-scheme: dark;
-      --bg-base: #0f0f0f;
-      --bg-surface: #141414;
-      --bg-raised: #1a1a1a;
-      --bg-hover: #202020;
-      --border: rgba(255,255,255,0.08);
-      --border-strong: rgba(255,255,255,0.16);
-      --text-primary: #f2f2f2;
-      --text-secondary: #9a9a9a;
-      --text-muted: #666;
-      --danger: #f87171;
-      --warn: #facc15;
-      --radius: 6px;
+      color-scheme: light;
+      --bg-base: #fcf9f8;
+      --bg-surface: rgba(255,255,255,0.82);
+      --bg-raised: #ffffff;
+      --bg-hover: #f6f3f2;
+      --border: #c2c6d4;
+      --border-strong: #727783;
+      --text-primary: #1c1b1b;
+      --text-secondary: #424752;
+      --text-muted: #727783;
+      --primary: #00488d;
+      --primary-hover: #005fb8;
+      --danger: #ba1a1a;
+      --warn: #9d5d00;
+      --radius: 8px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       width: 318px;
-      background: var(--bg-base);
+      background:
+        radial-gradient(circle at 20% 0%, rgba(0,95,184,0.16), transparent 44%),
+        radial-gradient(circle at 92% 14%, rgba(168,200,255,0.26), transparent 38%),
+        linear-gradient(135deg, #fcf9f8, #f6f3f2 52%, #eae7e7);
       color: var(--text-primary);
-      font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
       font-size: 13px;
       line-height: 1.4;
       padding: 1px;
@@ -38,11 +43,14 @@
       border: 1px solid var(--border);
       border-radius: var(--radius);
       overflow: hidden;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.04);
     }
 
     .panel.drag-over {
-      border-color: rgba(255,255,255,0.34);
-      box-shadow: 0 0 0 1px rgba(255,255,255,0.12), 0 18px 48px rgba(0,0,0,0.45);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 1px rgba(0,72,141,0.14), 0 18px 48px rgba(0,72,141,0.14);
     }
 
     .header {
@@ -57,7 +65,7 @@
       width: 7px;
       height: 7px;
       border-radius: 50%;
-      background: var(--text-muted);
+      background: var(--primary);
       flex-shrink: 0;
     }
 
@@ -67,7 +75,7 @@
       font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: var(--text-secondary);
+      color: var(--primary);
     }
 
     .section {
@@ -105,7 +113,8 @@
     }
 
     button:hover { background: var(--bg-hover); border-color: var(--border-strong); }
-    button.primary { background: #f2f2f2; color: #0f0f0f; border-color: transparent; font-weight: 600; }
+    button.primary { background: var(--primary); color: #fff; border-color: transparent; font-weight: 600; }
+    button.primary:hover { background: var(--primary-hover); }
     button.danger { color: var(--danger); }
     button.ghost { background: transparent; color: var(--text-secondary); }
     button.small { padding: 4px 7px; font-size: 11px; }
@@ -134,10 +143,10 @@
     .drop-zone {
       margin: 10px 12px 0;
       padding: 10px;
-      border: 1px dashed rgba(255,255,255,0.18);
+      border: 1px dashed rgba(0,72,141,0.28);
       border-radius: var(--radius);
       color: var(--text-secondary);
-      background: linear-gradient(135deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+      background: rgba(214,227,255,0.3);
       font-size: 12px;
       text-align: center;
     }
@@ -166,7 +175,7 @@
       width: 100%;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      background: #1a1a1a;
+      background: #fff;
       color: var(--text-primary);
       padding: 7px 8px;
       outline: none;
@@ -178,7 +187,8 @@
     }
 
     input:focus, textarea:focus, select:focus {
-      border-color: var(--border-strong);
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(0,95,184,0.12);
     }
 
     .check {
@@ -196,8 +206,8 @@
       margin-top: 8px;
       padding: 7px 8px;
       border: 1px solid rgba(250, 204, 21, 0.2);
-      color: #d4d4d4;
-      background: rgba(250, 204, 21, 0.07);
+      color: #5f3b00;
+      background: rgba(157, 93, 0, 0.08);
       border-radius: var(--radius);
       font-size: 11px;
       line-height: 1.45;
