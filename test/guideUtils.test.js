@@ -3,11 +3,13 @@ const assert = require("node:assert/strict");
 
 const {
   createGuide,
+  createBuilderResumeSession,
   createStep,
   normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
   prepareImportedGuide,
+  shouldResumeBuilderSession,
   upsertGuideStep,
 } = require("../guideUtils.js");
 
@@ -369,4 +371,45 @@ test("upsertGuideStep retargets an existing step without changing its id", () =>
   assert.equal(updated.steps[0].body, "Retargeted");
   assert.equal(updated.steps[0].target.selector, "#new");
   assert.equal(updated.steps[0].pageUrl, "https://example.com/new");
+});
+
+test("createBuilderResumeSession stores URL-match builder continuation", () => {
+  const session = createBuilderResumeSession("guide-local", {
+    advanceMode: "urlMatch",
+    advanceValue: "checkout/confirm",
+    tabId: 12,
+  });
+
+  assert.equal(session.guideId, "guide-local");
+  assert.equal(session.waitForUrl, "checkout/confirm");
+  assert.equal(session.tabId, 12);
+  assert.match(session.createdAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("createBuilderResumeSession ignores non URL-match steps", () => {
+  assert.equal(
+    createBuilderResumeSession("guide-local", {
+      advanceMode: "manual",
+      advanceValue: "checkout/confirm",
+    }),
+    null,
+  );
+  assert.equal(
+    createBuilderResumeSession("guide-local", {
+      advanceMode: "urlMatch",
+      advanceValue: " ",
+    }),
+    null,
+  );
+});
+
+test("shouldResumeBuilderSession matches the current URL", () => {
+  const session = {
+    guideId: "guide-local",
+    waitForUrl: "checkout/confirm",
+  };
+
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/checkout/confirm"), true);
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/cart"), false);
+  assert.equal(shouldResumeBuilderSession(null, "https://example.com/checkout/confirm"), false);
 });

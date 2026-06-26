@@ -257,6 +257,27 @@
     return normalizedGuide;
   }
 
+  function createBuilderResumeSession(guideId, fields = {}) {
+    const mode = normalizeAdvanceMode(fields.advanceMode);
+    const waitForUrl = textSnippet(fields.advanceValue, 500);
+    const normalizedGuideId = String(guideId || "").trim();
+    if (mode !== "urlMatch" || !waitForUrl || !/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedGuideId)) {
+      return null;
+    }
+    const session = {
+      guideId: normalizedGuideId,
+      waitForUrl,
+      createdAt: nowIso(),
+    };
+    if (Number.isInteger(fields.tabId)) session.tabId = fields.tabId;
+    return session;
+  }
+
+  function shouldResumeBuilderSession(session, currentUrl) {
+    if (!session?.guideId || !session?.waitForUrl) return false;
+    return String(currentUrl || "").includes(String(session.waitForUrl));
+  }
+
   function stringField(value, fallback = "") {
     if (value === undefined || value === null) return textSnippet(fallback, 2000);
     return String(value).replace(/\s+/g, " ").trim();
@@ -327,12 +348,14 @@
 
   return {
     createGuide,
+    createBuilderResumeSession,
     createStep,
     makeId,
     normalizeGuide,
     normalizeGuideUrl,
     normalizeStep,
     prepareImportedGuide,
+    shouldResumeBuilderSession,
     upsertGuideStep,
   };
 });

@@ -268,9 +268,16 @@ async function createGuideFromTab() {
 async function deleteGuide(guideId) {
   if (!confirm("Delete this guide?")) return;
   state.guides = state.guides.filter((guide) => guide.id !== guideId);
-  const { pendingGuideEdit } = await chrome.storage.local.get({ pendingGuideEdit: null });
-  if (pendingGuideEdit?.guideId === guideId) {
-    await chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]);
+  const { pendingGuideEdit, activeBuilderSession } = await chrome.storage.local.get({
+    pendingGuideEdit: null,
+    activeBuilderSession: null,
+  });
+  if (pendingGuideEdit?.guideId === guideId || activeBuilderSession?.guideId === guideId) {
+    await chrome.storage.local.remove([
+      "pendingGuideEdit",
+      "selectedGuideTarget",
+      "activeBuilderSession",
+    ]);
   }
   await saveGuides();
   setStatus("Guide deleted");
@@ -281,7 +288,7 @@ async function selectStepTarget(guideId, stepId = "") {
   const tab = await getActiveTab();
   if (!tab?.id) return setStatus("No active tab");
   await ensureInjected(tab.id);
-  await chrome.storage.local.set({ pendingGuideEdit: { guideId, stepId } });
+  await chrome.storage.local.set({ pendingGuideEdit: { guideId, stepId, tabId: tab.id } });
   await chrome.tabs.sendMessage(tab.id, { type: "CLICK_GUIDE_SELECT_STEP_TARGET" });
   window.close();
 }

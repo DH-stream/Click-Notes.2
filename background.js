@@ -10,8 +10,14 @@ async function injectGuide(tabId) {
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   if (changeInfo.status !== "complete") return;
-  const { activePlayback } = await chrome.storage.local.get({ activePlayback: null });
-  if (!activePlayback?.guide) return;
-  if (activePlayback.tabId !== tabId) return;
+  const { activePlayback, activeBuilderSession } = await chrome.storage.local.get({
+    activePlayback: null,
+    activeBuilderSession: null,
+  });
+  const shouldInjectPlayback = activePlayback?.guide && activePlayback.tabId === tabId;
+  const shouldInjectBuilder =
+    activeBuilderSession?.guideId &&
+    (!Number.isInteger(activeBuilderSession.tabId) || activeBuilderSession.tabId === tabId);
+  if (!shouldInjectPlayback && !shouldInjectBuilder) return;
   await injectGuide(tabId);
 });

@@ -16,6 +16,8 @@
     }
   });
   const upsertGuideStep = utils.upsertGuideStep;
+  const createBuilderResumeSession = utils.createBuilderResumeSession;
+  const shouldResumeBuilderSession = utils.shouldResumeBuilderSession;
 
   let mode = "idle";
   let hoveredElement = null;
@@ -24,6 +26,7 @@
   let activePlayback = null;
   let repositionRaf = null;
   let urlWatchTimer = null;
+  let builderUrlWatchTimer = null;
   let selectionToastTimer = null;
   let celebrationTimer = null;
 
@@ -50,6 +53,18 @@
   async function removeLocalStorage(keys) {
     if (!chrome?.runtime?.id) return;
     await chrome.storage.local.remove(keys);
+  }
+
+  function clearBuilderUrlWatch() {
+    if (builderUrlWatchTimer) clearInterval(builderUrlWatchTimer);
+    builderUrlWatchTimer = null;
+  }
+
+  function watchBuilderResumeSession() {
+    if (builderUrlWatchTimer) return;
+    builderUrlWatchTimer = setInterval(() => {
+      resumeBuilderSessionIfReady();
+    }, 600);
   }
 
   function escapeCssValue(value) {
@@ -757,6 +772,7 @@
       popupPlacement: formData.get("popupPlacement"),
       advanceMode: formData.get("advanceMode"),
       advanceValue: formData.get("advanceValue"),
+      tabId: pendingGuideEdit.tabId,
     };
     try {
       const { guides } = await getLocalStorage({ guides: [] });
@@ -772,11 +788,28 @@
         pendingGuideEdit.stepId,
         fields,
       );
-      await setLocalStorage({ guides: nextGuides });
-      await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget"]);
+      const builderSession = createBuilderResumeSession
+        ? createBuilderResumeSession(pendingGuideEdit.guideId, fields)
+        : null;
+      await setLocalStorage({
+        guides: nextGuides,
+        ...(builderSession ? { activeBuilderSession: builderSession } : {}),
+      });
+      await removeLocalStorage([
+        "pendingGuideEdit",
+        "selectedGuideTarget",
+        ...(builderSession ? [] : ["activeBuilderSession"]),
+      ]);
       removeInlineEditor();
       mode = "idle";
-      showSelectionToast("Step saved.", 2400);
+      if (builderSession) {
+        showSelectionToast("Step saved. Continue to the next page.", 4200);
+        watchBuilderResumeSession();
+        resumeBuilderSessionIfReady();
+      } else {
+        clearBuilderUrlWatch();
+        showSelectionToast("Step saved.", 2400);
+      }
     } catch {
       showSelectionToast("Could not save step.", 5000);
     }
@@ -785,8 +818,42 @@
   async function cancelInlineStepEditor() {
     removeInlineEditor();
     mode = "idle";
-    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget"]);
+    clearBuilderUrlWatch();
+    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
     hideSelectionToast();
+  }
+
+  async function resumeBuilderSessionIfReady() {
+    if (mode !== "idle" || !shouldResumeBuilderSession) return;
+    try {
+      const { activeBuilderSession, guides } = await getLocalStorage({
+        activeBuilderSession: null,
+        guides: [],
+      });
+      if (!activeBuilderSession) {
+        clearBuilderUrlWatch();
+        return;
+      }
+      if (!shouldResumeBuilderSession(activeBuilderSession, window.location.href)) return;
+      const guide = Array.isArray(guides)
+        ? guides.find((item) => item.id === activeBuilderSession.guideId)
+        : null;
+      if (!guide) {
+        clearBuilderUrlWatch();
+        await removeLocalStorage("activeBuilderSession");
+        return;
+      }
+      clearBuilderUrlWatch();
+      await setLocalStorage({
+        pendingGuideEdit: {
+          guideId: activeBuilderSession.guideId,
+          stepId: "",
+          tabId: activeBuilderSession.tabId,
+        },
+      });
+      await removeLocalStorage(["activeBuilderSession", "selectedGuideTarget"]);
+      startSelectMode("Select the next element for this guide");
+    } catch {}
   }
 
   function renderMissingStep(step) {
@@ -1003,10 +1070,10 @@
     });
   }
 
-  function startSelectMode() {
+  function startSelectMode(message = "Select an element for this guide step") {
     stopPlayback();
     mode = "builder-selecting-target";
-    showSelectionToast("Select an element for this guide step");
+    showSelectionToast(message);
   }
 
   function showSelectionToast(message, durationMs = 0) {
@@ -1024,7 +1091,10 @@
     mode = "idle";
     clearHover();
     hideSelectionToast();
-    safeStorage(() => chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget"]));
+    clearBuilderUrlWatch();
+    safeStorage(() =>
+      chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]),
+    );
   }
 
   async function finishSelectMode(selection, event) {
@@ -1127,4 +1197,9 @@
       renderPlaybackStep();
     }),
   );
+
+  safeStorage(() => {
+    resumeBuilderSessionIfReady();
+    watchBuilderResumeSession();
+  });
 })();
