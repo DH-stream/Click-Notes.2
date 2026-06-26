@@ -6,6 +6,7 @@ const {
   createBuilderResumeSession,
   createStep,
   deriveSafeUrlMatch,
+  getTargetDisplayLabel,
   matchesAdvanceUrl,
   normalizeGuide,
   normalizeGuideUrl,
@@ -14,6 +15,18 @@ const {
   shouldResumeBuilderSession,
   upsertGuideStep,
 } = require("../guideUtils.js");
+
+test("getTargetDisplayLabel describes saved targets without technical jargon", () => {
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "button" }), "Button");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "a", href: "https://example.com" }), "Link");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "input", type: "text" }), "Input field");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "textarea" }), "Text area");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "select" }), "Dropdown");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "input", type: "checkbox" }), "Checkbox");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "div", anchorMode: "rect" }), "Visual area");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "body", anchorMode: "rect" }), "Page area");
+  assert.equal(getTargetDisplayLabel({ fallbackTagName: "section" }), "Step target");
+});
 
 test("deriveSafeUrlMatch strips query params and hashes", () => {
   assert.equal(
@@ -105,7 +118,7 @@ test("prepareImportedGuide accepts a guide and replaces conflicting ids", () => 
 test("prepareImportedGuide rejects invalid guide JSON", () => {
   assert.throws(
     () => prepareImportedGuide({ title: "", startUrl: "", steps: "nope" }, []),
-    /steps array/,
+    /This guide file is missing steps\./,
   );
 });
 
@@ -120,7 +133,7 @@ test("prepareImportedGuide rejects a step without target or saved position", () 
         },
         [],
       ),
-    /target or saved position/,
+    /One step is missing a saved target\./,
   );
 });
 
@@ -135,7 +148,7 @@ test("prepareImportedGuide rejects unsafe start URLs", () => {
         },
         [],
       ),
-    /safe absolute URL/,
+    /This guide file has an unsafe start page\./,
   );
 });
 
