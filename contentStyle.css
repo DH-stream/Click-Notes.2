@@ -349,8 +349,8 @@
   place-items: center;
   width: 39px;
   height: 39px;
-  border: 2px dashed #79a7ff !important;
-  border-radius: 50% !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   line-height: 1;
   font-size: 27px !important;
   font-weight: 300 !important;

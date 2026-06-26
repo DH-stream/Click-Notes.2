@@ -16,7 +16,8 @@ test("playback popup uses the compact step card structure", () => {
 
 test("playback popup styles match the reference card", () => {
   assert.match(contentStyle, /#click-guide-popup\s*\{[\s\S]*width: min\(320px, calc\(100vw - 24px\)\)/);
-  assert.match(contentStyle, /#click-guide-popup \.click-guide-close\s*\{[\s\S]*border: 2px dashed #79a7ff/);
+  assert.doesNotMatch(contentStyle, /#click-guide-popup \.click-guide-close\s*\{[\s\S]*border: 2px dashed #79a7ff/);
+  assert.match(contentStyle, /#click-guide-popup \.click-guide-close\s*\{[\s\S]*border: 0 !important/);
   assert.match(contentStyle, /\.click-guide-card-body\s*\{[\s\S]*padding: 22px 16px 24px/);
   assert.match(contentStyle, /\.click-guide-count\s*\{[\s\S]*color: #00488d/);
   assert.match(contentStyle, /\.click-guide-footer\s*\{[\s\S]*border-top: 1px solid #e5e7eb/);
