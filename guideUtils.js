@@ -114,6 +114,23 @@
     };
   }
 
+  function getTargetDisplayLabel(target = {}) {
+    const tagName = String(target.fallbackTagName || "").toLowerCase();
+    const role = String(target.fallbackRole || "").toLowerCase();
+    const type = String(target.type || "").toLowerCase();
+    if (target.anchorMode === "rect") {
+      return ["body", "html"].includes(tagName) ? "Page area" : "Visual area";
+    }
+    if (type === "checkbox") return "Checkbox";
+    if (tagName === "button" || role === "button") return "Button";
+    if (tagName === "a" || role === "link" || target.href) return "Link";
+    if (tagName === "textarea") return "Text area";
+    if (tagName === "select") return "Dropdown";
+    if (tagName === "input") return "Input field";
+    if (["body", "html"].includes(tagName)) return "Page area";
+    return "Step target";
+  }
+
   function normalizeGuide(guide) {
     const timestamp = nowIso();
     return {
@@ -376,35 +393,35 @@
     try {
       if (typeof input === "string") guide = JSON.parse(input);
     } catch {
-      throw new Error("Import failed: file is not valid JSON");
+      throw new Error("This guide file could not be read.");
     }
     if (
       !guide ||
       typeof guide !== "object" ||
       !Array.isArray(guide.steps)
     ) {
-      throw new Error("Import failed: guide must include a steps array");
+      throw new Error("This guide file is missing steps.");
     }
     if (!String(guide.title || "").trim()) {
-      throw new Error("Import failed: guide title is required");
+      throw new Error("This guide file is missing a title.");
     }
     if (!String(guide.startUrl || "").trim()) {
-      throw new Error("Import failed: guide startUrl is required");
+      throw new Error("This guide file is missing a start page.");
     }
     const startUrl = normalizeGuideUrl(guide.startUrl);
     if (!startUrl) {
-      throw new Error("Import failed: guide startUrl must be a safe absolute URL");
+      throw new Error("This guide file has an unsafe start page.");
     }
     guide.steps.forEach((step, index) => {
       if (!String(step?.title || step?.body || "").trim()) {
-        throw new Error(`Import failed: step ${index + 1} needs title or body`);
+        throw new Error("One step is missing its instructions.");
       }
       if (!stepHasTargetOrAnchor(step)) {
-        throw new Error(`Import failed: step ${index + 1} needs a target or saved position`);
+        throw new Error("One step is missing a saved target.");
       }
     });
     if (!guide.steps.length) {
-      throw new Error("Import failed: guide needs at least one step");
+      throw new Error("This guide file is missing steps.");
     }
     const timestamp = nowIso();
     const guideId = normalizeEntityId(guide.id, "guide");
@@ -418,6 +435,7 @@
     createBuilderResumeSession,
     createStep,
     deriveSafeUrlMatch,
+    getTargetDisplayLabel,
     makeId,
     matchesAdvanceUrl,
     normalizeGuide,
