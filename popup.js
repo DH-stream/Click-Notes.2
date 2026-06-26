@@ -24,6 +24,21 @@ function setStatus(message) {
   statusEl.textContent = message || "";
 }
 
+const importErrorMessages = new Set([
+  "This guide file could not be read.",
+  "This guide file is missing steps.",
+  "This guide file is missing a title.",
+  "This guide file is missing a start page.",
+  "This guide file has an unsafe start page.",
+  "One step is missing its instructions.",
+  "One step is missing a saved target.",
+]);
+
+function getImportErrorMessage(error) {
+  const message = String(error?.message || "");
+  return importErrorMessages.has(message) ? message : "This guide file could not be imported.";
+}
+
 function el(tag, props = {}, children = []) {
   const node = document.createElement(tag);
   Object.entries(props).forEach(([key, value]) => {
@@ -385,7 +400,7 @@ async function handleImport(file) {
     render();
     await playGuide(imported.id);
   } catch (error) {
-    setStatus(error?.message || "Import failed");
+    setStatus(getImportErrorMessage(error));
   } finally {
     importFile.value = "";
   }

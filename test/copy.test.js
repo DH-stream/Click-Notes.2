@@ -39,6 +39,11 @@ test("popup step editing uses human target and continuation labels", () => {
   assert.doesNotMatch(popup, /textContent: step\.target\?\.selector/);
 });
 
+test("unexpected import failures never expose raw exception messages", () => {
+  assert.match(popup, /This guide file could not be imported\./);
+  assert.doesNotMatch(popup, /setStatus\(error\?\.message \|\| "Import failed"\)/);
+});
+
 test("page-appearance completion stays available only when already configured", () => {
   assert.match(contentScript, /if \(existing\?\.advance\?\.mode === "elementVisible"/);
   assert.match(popup, /if \(step\.advance\?\.mode === "elementVisible"/);
