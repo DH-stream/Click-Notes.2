@@ -733,13 +733,19 @@
       ],
       existing?.playback?.popupPlacement || "auto",
     );
+    const advanceOptions = [
+      { value: "manual", label: "Continue manually" },
+      { value: "urlMatch", label: "After opening a page" },
+    ];
+    if (existing?.advance?.mode === "elementVisible" && existing.advance.value) {
+      advanceOptions.push({
+        value: "elementVisible",
+        label: "When part of the page appears",
+      });
+    }
     const advanceMode = createInlineSelect(
       "advanceMode",
-      [
-        { value: "manual", label: "Continue manually" },
-        { value: "urlMatch", label: "After opening a page" },
-        { value: "elementVisible", label: "When part of the page appears" },
-      ],
+      advanceOptions,
       existing?.advance?.mode || (suggestedLinkMatch ? "urlMatch" : "manual"),
     );
     const advanceValue = createNode("input", {

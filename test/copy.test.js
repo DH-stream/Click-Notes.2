@@ -38,3 +38,8 @@ test("popup step editing uses human target and continuation labels", () => {
   assert.doesNotMatch(popup, /Scroll automatically to element/);
   assert.doesNotMatch(popup, /textContent: step\.target\?\.selector/);
 });
+
+test("page-appearance completion stays available only when already configured", () => {
+  assert.match(contentScript, /if \(existing\?\.advance\?\.mode === "elementVisible"/);
+  assert.match(popup, /if \(step\.advance\?\.mode === "elementVisible"/);
+});

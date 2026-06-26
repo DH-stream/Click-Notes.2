@@ -215,11 +215,14 @@ function renderStepEditor() {
     placement.append(option);
   });
   const advanceMode = el("select", { id: "advanceMode" });
-  [
+  const advanceOptions = [
     ["manual", "Continue manually"],
     ["urlMatch", "After opening a page"],
-    ["elementVisible", "When part of the page appears"],
-  ].forEach(([value, label]) => {
+  ];
+  if (step.advance?.mode === "elementVisible" && step.advance.value) {
+    advanceOptions.push(["elementVisible", "When part of the page appears"]);
+  }
+  advanceOptions.forEach(([value, label]) => {
     const option = el("option", { value, textContent: label });
     option.selected = (step.advance?.mode || "manual") === value;
     advanceMode.append(option);
