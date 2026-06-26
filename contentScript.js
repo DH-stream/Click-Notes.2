@@ -15,6 +15,35 @@
       return "";
     }
   });
+  const deriveSafeUrlMatch =
+    utils.deriveSafeUrlMatch ||
+    ((value, baseUrl = "") => {
+      const raw = String(value || "").trim().slice(0, 500);
+      if (!raw || /^\/\//.test(raw)) return "";
+      try {
+        const url = new URL(raw, baseUrl || undefined);
+        if (!["http:", "https:", "file:"].includes(url.protocol)) return "";
+        return url.protocol === "file:" ? `file://${url.pathname}` : url.pathname || "/";
+      } catch {
+        const path = raw.split(/[?#]/, 1)[0];
+        return /^[a-zA-Z0-9._~!$&'()*+,;=:@%/-]+$/.test(path) ? path : "";
+      }
+    });
+  const matchesAdvanceUrl =
+    utils.matchesAdvanceUrl ||
+    ((currentUrl, advanceValue) => {
+      const currentFull = normalizeGuideUrl(currentUrl);
+      const safeAdvance = deriveSafeUrlMatch(advanceValue);
+      if (!currentFull || !safeAdvance) return false;
+      try {
+        const current = new URL(currentFull);
+        if (safeAdvance.startsWith("file://")) return currentFull === safeAdvance;
+        if (safeAdvance.startsWith("/")) return current.pathname === safeAdvance;
+        return current.pathname.includes(safeAdvance) || currentFull.includes(safeAdvance);
+      } catch {
+        return false;
+      }
+    });
   const upsertGuideStep = utils.upsertGuideStep;
   const createBuilderResumeSession = utils.createBuilderResumeSession;
   const shouldResumeBuilderSession = utils.shouldResumeBuilderSession;
@@ -672,6 +701,7 @@
   function renderInlineStepEditor(selection, payload, pendingGuideEdit, guide) {
     removeInlineEditor();
     const existing = guide.steps.find((step) => step.id === pendingGuideEdit.stepId);
+    const suggestedLinkMatch = deriveSafeUrlMatch(payload?.href, payload?.pageUrl || guide.startUrl);
     const layer = ensureOverlayLayer();
     const rect = getAnchorRect(selection, payload);
     showInlineTargetHighlight(layer, rect);
@@ -697,14 +727,14 @@
     const advanceMode = createInlineSelect(
       "advanceMode",
       ["manual", "urlMatch", "elementVisible"],
-      existing?.advance?.mode || "manual",
+      existing?.advance?.mode || (suggestedLinkMatch ? "urlMatch" : "manual"),
     );
     const advanceValue = createNode("input", {
       type: "text",
       name: "advanceValue",
       placeholder: "URL contains or selector",
     });
-    advanceValue.value = existing?.advance?.value || "";
+    advanceValue.value = existing?.advance?.value || (!existing ? suggestedLinkMatch : "");
 
     inlineEditor = createNode("form", { id: "click-guide-inline-editor" }, [
       createNode("button", {
@@ -1028,7 +1058,9 @@
     }
     if (step.advance?.mode !== "urlMatch" || !step.advance?.value) return;
     urlWatchTimer = setInterval(() => {
-      if (window.location.href.includes(step.advance.value)) goToStep(activePlayback.stepIndex + 1);
+      if (matchesAdvanceUrl(window.location.href, step.advance.value)) {
+        goToStep(activePlayback.stepIndex + 1);
+      }
     }, 600);
   }
 

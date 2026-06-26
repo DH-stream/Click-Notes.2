@@ -23,3 +23,13 @@ test("playback popup styles match the reference card", () => {
   assert.match(contentStyle, /\.click-guide-footer\s*\{[\s\S]*border-top: 1px solid #e5e7eb/);
   assert.match(contentStyle, /#click-guide-popup \[data-action="next"\]\s*\{[\s\S]*border-radius: 0/);
 });
+
+test("URL completion uses the shared matcher and keeps manual fallback", () => {
+  assert.match(contentScript, /const suggestedLinkMatch = deriveSafeUrlMatch/);
+  assert.match(contentScript, /suggestedLinkMatch \? "urlMatch" : "manual"/);
+  assert.match(contentScript, /!existing \? suggestedLinkMatch : ""/);
+  assert.match(contentScript, /const matchesAdvanceUrl =/);
+  assert.match(contentScript, /matchesAdvanceUrl\(window\.location\.href, step\.advance\.value\)/);
+  assert.doesNotMatch(contentScript, /window\.location\.href\.includes\(step\.advance\.value\)/);
+  assert.match(contentScript, /Continue anyway/);
+});
