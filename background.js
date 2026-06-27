@@ -1,7 +1,6 @@
 async function injectGuide(tabId) {
   try {
     await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentStyle.css"] });
-    await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentHighlightFix.css"] });
     await chrome.scripting.executeScript({
       target: { tabId },
       files: ["guideUtils.js", "contentScript.js"],
