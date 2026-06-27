@@ -3,7 +3,7 @@ async function injectGuide(tabId) {
     await chrome.scripting.insertCSS({ target: { tabId }, files: ["contentStyle.css"] });
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["guideUtils.js", "contentScript.js"],
+      files: ["guideUtils.js", "contentRectGeometryPatch.js", "contentScript.js"],
     });
   } catch {}
 }
