@@ -360,14 +360,17 @@
         Math.max(0, element.getBoundingClientRect().height) >
         0;
     return {
+      source,
       element,
       anchorMode: hasReliableElement ? "element" : "rect",
       reason: hasReliableElement ? "dom-target" : "visual-rect",
     };
   }
 
-  function captureTarget(element, anchorMode = "element", event) {
-    const sourceRect = element.getBoundingClientRect();
+  function captureTarget(element, anchorMode = "element", event, visualSource = element) {
+    const rectSource =
+      anchorMode === "rect" && visualSource instanceof HTMLElement ? visualSource : element;
+    const sourceRect = rectSource.getBoundingClientRect();
     const selector = getElementSelector(element);
     const tagName = element.tagName.toLowerCase();
     const type = element.getAttribute("type") || "";
@@ -1625,7 +1628,7 @@
   }
 
   async function finishSelectMode(selection, event) {
-    const payload = captureTarget(selection.element, selection.anchorMode, event);
+    const payload = captureTarget(selection.element, selection.anchorMode, event, selection.source);
     mode = "idle";
     clearHover();
     try {
