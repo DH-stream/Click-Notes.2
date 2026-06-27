@@ -358,6 +358,39 @@
     return session;
   }
 
+  function createPendingNavigationConfirmation(guideId, stepId, sourceUrl, tabId, now = Date.now()) {
+    const normalizedGuideId = String(guideId || "").trim();
+    const normalizedStepId = String(stepId || "").trim();
+    const safeSourceUrl = normalizeGuideUrl(sourceUrl);
+    if (
+      !/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedGuideId) ||
+      !/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedStepId) ||
+      !safeSourceUrl
+    ) {
+      return null;
+    }
+    const pending = {
+      guideId: normalizedGuideId,
+      stepId: normalizedStepId,
+      sourceUrl: safeSourceUrl,
+      createdAt: now,
+      expiresAt: now + 60000,
+      status: "watching",
+    };
+    if (Number.isInteger(tabId)) pending.tabId = tabId;
+    return pending;
+  }
+
+  function shouldShowNavigationConfirmation(pending, currentUrl, now = Date.now()) {
+    if (pending?.status !== "watching") return false;
+    if (!pending.guideId || !pending.stepId) return false;
+    if (Number(pending.expiresAt) <= now) return false;
+    const sourceUrl = normalizeGuideUrl(pending.sourceUrl);
+    const normalizedCurrentUrl = normalizeGuideUrl(currentUrl);
+    if (!sourceUrl || !normalizedCurrentUrl || sourceUrl === normalizedCurrentUrl) return false;
+    return Boolean(deriveSafeUrlMatch(normalizedCurrentUrl));
+  }
+
   function shouldResumeBuilderSession(session, currentUrl) {
     if (!session?.guideId) return false;
     if (session.status === "selecting") return true;
@@ -436,6 +469,7 @@
   return {
     createGuide,
     createBuilderResumeSession,
+    createPendingNavigationConfirmation,
     createStep,
     deriveSafeUrlMatch,
     getTargetDisplayLabel,
@@ -445,6 +479,7 @@
     normalizeGuideUrl,
     normalizeStep,
     prepareImportedGuide,
+    shouldShowNavigationConfirmation,
     shouldResumeBuilderSession,
     upsertGuideStep,
   };

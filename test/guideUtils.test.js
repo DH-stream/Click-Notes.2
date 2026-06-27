@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const {
   createGuide,
   createBuilderResumeSession,
+  createPendingNavigationConfirmation,
   createStep,
   deriveSafeUrlMatch,
   getTargetDisplayLabel,
@@ -12,6 +13,7 @@ const {
   normalizeGuideUrl,
   normalizeStep,
   prepareImportedGuide,
+  shouldShowNavigationConfirmation,
   shouldResumeBuilderSession,
   upsertGuideStep,
 } = require("../guideUtils.js");
@@ -542,6 +544,58 @@ test("createBuilderResumeSession keeps manual steps in selecting mode", () => {
   assert.equal(session.tabId, 7);
   assert.equal(session.waitForUrl, undefined);
   assert.equal(shouldResumeBuilderSession(session, "https://example.com/anywhere"), true);
+});
+
+test("createPendingNavigationConfirmation stores safe source URL for manual steps", () => {
+  const pending = createPendingNavigationConfirmation(
+    "guide-123",
+    "step-123",
+    "https://example.com/orders/123?token=secret#top",
+    7,
+    1000,
+  );
+
+  assert.deepEqual(pending, {
+    guideId: "guide-123",
+    stepId: "step-123",
+    sourceUrl: "https://example.com/orders/123",
+    createdAt: 1000,
+    expiresAt: 61000,
+    tabId: 7,
+    status: "watching",
+  });
+});
+
+test("createPendingNavigationConfirmation rejects unsafe or incomplete values", () => {
+  assert.equal(
+    createPendingNavigationConfirmation("guide-123", "step-123", "javascript:alert(1)", 7),
+    null,
+  );
+  assert.equal(createPendingNavigationConfirmation("guide-123", "", "https://example.com", 7), null);
+});
+
+test("shouldShowNavigationConfirmation detects changed safe URLs before expiry", () => {
+  const pending = createPendingNavigationConfirmation(
+    "guide-123",
+    "step-123",
+    "https://example.com/start?token=secret#top",
+    7,
+    1000,
+  );
+
+  assert.equal(
+    shouldShowNavigationConfirmation(pending, "https://example.com/done?session=secret#hash", 2000),
+    true,
+  );
+  assert.equal(
+    shouldShowNavigationConfirmation(pending, "https://example.com/start?other=secret#hash", 2000),
+    false,
+  );
+  assert.equal(
+    shouldShowNavigationConfirmation(pending, "https://example.com/done", 62000),
+    false,
+  );
+  assert.equal(shouldShowNavigationConfirmation(pending, "javascript:alert(1)", 2000), false);
 });
 
 test("createBuilderResumeSession waits for URL-match steps", () => {
