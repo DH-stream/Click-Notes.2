@@ -26,13 +26,8 @@
   position: absolute;
   border: 2px solid rgba(0, 95, 184, 0.96);
   border-radius: 10px;
-  background: rgba(0, 95, 184, 0.08);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.88) inset,
-    0 0 0 4px rgba(0, 72, 141, 0.18),
-    0 0 0 9px rgba(168, 200, 255, 0.14),
-    0 0 28px rgba(0, 95, 184, 0.3),
-    0 18px 44px rgba(0, 72, 141, 0.16);
+  background: rgba(0, 95, 184, 0.07);
+  box-shadow: 0 0 28px 6px rgba(0, 95, 184, 0.28);
   box-sizing: border-box;
   pointer-events: none;
   animation:
@@ -41,14 +36,9 @@
 }
 
 .click-guide-target-highlight-saved {
-  border-color: rgba(71, 85, 105, 0.94);
-  border-style: dashed;
-  background: rgba(148, 163, 184, 0.12);
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.82) inset,
-    0 0 0 4px rgba(71, 85, 105, 0.14),
-    0 0 0 9px rgba(203, 213, 225, 0.12),
-    0 12px 36px rgba(15, 23, 42, 0.16);
+  border-color: rgba(100, 116, 139, 0.96);
+  background: rgba(148, 163, 184, 0.1);
+  box-shadow: 0 0 26px 6px rgba(148, 163, 184, 0.26);
 }
 
 #click-guide-popup,

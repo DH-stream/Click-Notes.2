@@ -94,6 +94,17 @@ test("exact and saved-position highlights have distinct polished styles", () => 
   assert.match(contentStyle, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
+test("playback highlights use one clean edge with a diffuse halo", () => {
+  const exactRule = contentStyle.match(/\.click-guide-target-highlight\s*\{([^}]*)\}/)?.[1] || "";
+  const savedRule = contentStyle.match(/\.click-guide-target-highlight-saved\s*\{([^}]*)\}/)?.[1] || "";
+
+  assert.match(exactRule, /border: 2px solid/);
+  assert.match(exactRule, /box-shadow: 0 0 28px 6px/);
+  assert.doesNotMatch(exactRule, /inset|0 0 0 \d+px/);
+  assert.match(savedRule, /box-shadow: 0 0 26px 6px/);
+  assert.doesNotMatch(savedRule, /inset|dashed|0 0 0 \d+px/);
+});
+
 test("builder editing shows non-blocking numbered saved-step pins", () => {
   assert.match(contentScript, /function renderBuilderStepPins/);
   assert.match(contentScript, /normalizeGuideUrl\(step\?\.pageUrl \|\| step\?\.target\?\.pageUrl \|\| ""\)/);
