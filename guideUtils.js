@@ -345,20 +345,23 @@
     const mode = normalizeAdvanceMode(fields.advanceMode);
     const waitForUrl = deriveSafeUrlMatch(fields.advanceValue);
     const normalizedGuideId = String(guideId || "").trim();
-    if (mode !== "urlMatch" || !waitForUrl || !/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedGuideId)) {
-      return null;
-    }
+    if (!/^[a-zA-Z0-9_-]{1,120}$/.test(normalizedGuideId)) return null;
+    const timestamp = nowIso();
     const session = {
       guideId: normalizedGuideId,
-      waitForUrl,
-      createdAt: nowIso(),
+      status: mode === "urlMatch" && waitForUrl ? "waitingForUrl" : "selecting",
+      createdAt: timestamp,
+      updatedAt: timestamp,
     };
+    if (session.status === "waitingForUrl") session.waitForUrl = waitForUrl;
     if (Number.isInteger(fields.tabId)) session.tabId = fields.tabId;
     return session;
   }
 
   function shouldResumeBuilderSession(session, currentUrl) {
-    if (!session?.guideId || !session?.waitForUrl) return false;
+    if (!session?.guideId) return false;
+    if (session.status === "selecting") return true;
+    if (!session.waitForUrl) return false;
     return matchesAdvanceUrl(currentUrl, session.waitForUrl);
   }
 

@@ -481,6 +481,7 @@ test("createBuilderResumeSession stores URL-match builder continuation", () => {
   });
 
   assert.equal(session.guideId, "guide-local");
+  assert.equal(session.status, "waitingForUrl");
   assert.equal(session.waitForUrl, "checkout/confirm");
   assert.equal(session.tabId, 12);
   assert.match(session.createdAt, /^\d{4}-\d{2}-\d{2}T/);
@@ -493,29 +494,28 @@ test("createBuilderResumeSession stores only a safe URL-match value", () => {
   });
 
   assert.equal(session.waitForUrl, "/checkout/confirm");
-  assert.equal(
-    createBuilderResumeSession("guide-local", {
-      advanceMode: "urlMatch",
-      advanceValue: "javascript:alert(1)",
-    }),
-    null,
-  );
+  const unsafeSession = createBuilderResumeSession("guide-local", {
+    advanceMode: "urlMatch",
+    advanceValue: "javascript:alert(1)",
+  });
+  assert.equal(unsafeSession.status, "selecting");
+  assert.equal(unsafeSession.waitForUrl, undefined);
 });
 
-test("createBuilderResumeSession ignores non URL-match steps", () => {
+test("createBuilderResumeSession continues selecting for non URL-match steps", () => {
   assert.equal(
     createBuilderResumeSession("guide-local", {
       advanceMode: "manual",
       advanceValue: "checkout/confirm",
-    }),
-    null,
+    }).status,
+    "selecting",
   );
   assert.equal(
     createBuilderResumeSession("guide-local", {
       advanceMode: "urlMatch",
       advanceValue: " ",
-    }),
-    null,
+    }).status,
+    "selecting",
   );
 });
 
@@ -528,4 +528,30 @@ test("shouldResumeBuilderSession matches the current URL", () => {
   assert.equal(shouldResumeBuilderSession(session, "https://example.com/checkout/confirm"), true);
   assert.equal(shouldResumeBuilderSession(session, "https://example.com/cart"), false);
   assert.equal(shouldResumeBuilderSession(null, "https://example.com/checkout/confirm"), false);
+});
+
+
+test("createBuilderResumeSession keeps manual steps in selecting mode", () => {
+  const session = createBuilderResumeSession("guide-123", {
+    advanceMode: "manual",
+    tabId: 7,
+  });
+
+  assert.equal(session.guideId, "guide-123");
+  assert.equal(session.status, "selecting");
+  assert.equal(session.tabId, 7);
+  assert.equal(session.waitForUrl, undefined);
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/anywhere"), true);
+});
+
+test("createBuilderResumeSession waits for URL-match steps", () => {
+  const session = createBuilderResumeSession("guide-123", {
+    advanceMode: "urlMatch",
+    advanceValue: "/done?token=secret#hash",
+  });
+
+  assert.equal(session.status, "waitingForUrl");
+  assert.equal(session.waitForUrl, "/done");
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/start"), false);
+  assert.equal(shouldResumeBuilderSession(session, "https://example.com/done?token=secret"), true);
 });

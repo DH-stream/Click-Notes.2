@@ -55,8 +55,11 @@
   let inlineEditor = null;
   let activePlayback = null;
   let repositionRaf = null;
+  let builderPinsRaf = null;
+  let lastBuilderPinsUrl = "";
   let urlWatchTimer = null;
   let builderUrlWatchTimer = null;
+  let overlayPositionListenersActive = false;
   let selectionToastTimer = null;
   let celebrationTimer = null;
 
@@ -93,6 +96,11 @@
   function watchBuilderResumeSession() {
     if (builderUrlWatchTimer) return;
     builderUrlWatchTimer = setInterval(() => {
+      const currentUrl = normalizeGuideUrl(window.location.href);
+      if (currentUrl !== lastBuilderPinsUrl) {
+        lastBuilderPinsUrl = currentUrl;
+        scheduleBuilderPins();
+      }
       resumeBuilderSessionIfReady();
     }, 600);
   }
@@ -285,7 +293,8 @@
     return Boolean(
       element.closest("#click-guide-overlay-layer") ||
         element.closest("#click-guide-inline-editor") ||
-        element.closest("#click-guide-selection-toast"),
+        element.closest("#click-guide-selection-toast") ||
+        element.closest("#click-guide-builder-bar"),
     );
   }
 
@@ -412,11 +421,18 @@
     if (overlayLayer) overlayLayer.innerHTML = "";
     if (urlWatchTimer) clearInterval(urlWatchTimer);
     if (celebrationTimer) clearTimeout(celebrationTimer);
+    if (builderPinsRaf) cancelAnimationFrame(builderPinsRaf);
+    builderPinsRaf = null;
     urlWatchTimer = null;
     celebrationTimer = null;
   }
 
+  function clearBuilderStepPins() {
+    document.querySelectorAll(".click-guide-step-pin").forEach((item) => item.remove());
+  }
+
   function preparePlaybackLayer(layer, dimPage) {
+    clearBuilderStepPins();
     const existingDimLayer = layer.querySelector("#click-guide-dim-layer");
     if (dimPage && !existingDimLayer) {
       layer.append(elFromHtml(`<div id="click-guide-dim-layer"></div>`));
@@ -463,6 +479,79 @@
       rect.top < window.innerHeight &&
       rect.left < window.innerWidth
     );
+  }
+
+  const genericSelectorClasses = new Set([
+    "hide-sm",
+    "show-sm",
+    "container",
+    "wrapper",
+    "layout",
+    "clearfix",
+    "sr-only",
+    "visually-hidden",
+    "d-flex",
+    "flex",
+    "grid",
+    "row",
+    "col",
+  ]);
+
+  function hasSavedVisualAnchor(step) {
+    const target = step?.target || {};
+    const rect = target.rect || {};
+    const anchor = target.anchorPoint || {};
+    return (
+      (Number(rect.width) > 0 && Number(rect.height) > 0) ||
+      (Number.isFinite(Number(anchor.documentX)) && Number.isFinite(Number(anchor.documentY)))
+    );
+  }
+
+  function selectorMatchCount(selector) {
+    if (!selector) return 0;
+    try {
+      return document.querySelectorAll(selector).length;
+    } catch {
+      return 0;
+    }
+  }
+
+  function isGenericSelector(selector) {
+    const value = String(selector || "").trim();
+    if (!value) return true;
+    if (/^([a-z][a-z0-9-]*)?\.[a-zA-Z0-9_-]+$/.test(value)) {
+      const className = value.split(".").pop();
+      return genericSelectorClasses.has(className);
+    }
+    const classMatches = [...value.matchAll(/\.([a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
+    return Boolean(classMatches.length) && classMatches.every((item) => genericSelectorClasses.has(item));
+  }
+
+  function isResolvedElementTrustworthy(element, step) {
+    if (!(element instanceof HTMLElement)) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    if (rect.width >= window.innerWidth * 0.95 || rect.height >= window.innerHeight * 0.95) return false;
+    const target = step?.target || {};
+    const pageUrl = target.pageUrl || step?.pageUrl || "";
+    const samePage = !pageUrl || normalizeGuideUrl(window.location.href) === normalizeGuideUrl(pageUrl);
+    if (!samePage) return true;
+    const selector = target.selector || "";
+    const matchCount = selectorMatchCount(selector);
+    const confidence = target.selectorConfidence || "weak";
+    const isStrongEnough = ["strong", "medium"].includes(confidence) && matchCount === 1 && !isGenericSelector(selector);
+    if (isStrongEnough) return true;
+    if (!hasSavedVisualAnchor(step)) return !isGenericSelector(selector) && matchCount <= 1;
+    const savedRect = getFallbackRect(step);
+    if (!savedRect) return false;
+    const liveCenterX = rect.left + rect.width / 2 + window.scrollX;
+    const liveCenterY = rect.top + rect.height / 2 + window.scrollY;
+    const savedCenterX = savedRect.documentX + savedRect.width / 2;
+    const savedCenterY = savedRect.documentY + savedRect.height / 2;
+    const distance = Math.hypot(liveCenterX - savedCenterX, liveCenterY - savedCenterY);
+    const allowedDistance = Math.max(160, Math.min(window.innerWidth, window.innerHeight) * 0.35);
+    if (distance > allowedDistance) return false;
+    return !isGenericSelector(selector) && matchCount <= 1;
   }
 
   function findTargetElement(step) {
@@ -570,10 +659,82 @@
     }
 
     const element = findTargetElement(step);
-    if (element) return { element, rectFallback: false };
+    if (element && isResolvedElementTrustworthy(element, step)) return { element, rectFallback: false };
     if (!isSafeRectFallback(step)) return null;
     const rect = getFallbackRect(step);
     return rect ? { rect, rectFallback: true } : null;
+  }
+
+  function getResolvedTargetRect(resolvedTarget, step) {
+    if (resolvedTarget?.element) return resolvedTarget.element.getBoundingClientRect();
+    if (resolvedTarget?.rectFallback) return getFallbackRect(step);
+    return null;
+  }
+
+  function renderBuilderStepPins(guide, activeStepId = "") {
+    const layer = ensureOverlayLayer();
+    clearBuilderStepPins();
+    const currentUrl = normalizeGuideUrl(window.location.href);
+    if (!guide?.steps?.length || !currentUrl) return;
+    guide.steps.forEach((step, index) => {
+      const stepUrl = normalizeGuideUrl(step?.pageUrl || step?.target?.pageUrl || "");
+      if (!stepUrl || stepUrl !== currentUrl) return;
+      const resolvedTarget = resolvePlaybackTarget(step);
+      const rect = getResolvedTargetRect(resolvedTarget, step);
+      if (!rect) return;
+      const pin = document.createElement("div");
+      pin.className = `click-guide-step-pin${step.id === activeStepId ? " click-guide-step-pin-active" : ""}`;
+      pin.textContent = String(step.order || index + 1);
+      pin.style.left = `${Math.round((resolvedTarget.rectFallback ? rect.documentX : rect.left + window.scrollX) + rect.width / 2)}px`;
+      pin.style.top = `${Math.round((resolvedTarget.rectFallback ? rect.documentY : rect.top + window.scrollY) + rect.height / 2)}px`;
+      layer.append(pin);
+    });
+  }
+
+  async function renderBuilderPinsForPending() {
+    try {
+      const { pendingGuideEdit, guides } = await getLocalStorage({
+        pendingGuideEdit: null,
+        guides: [],
+      });
+      const guide = Array.isArray(guides)
+        ? guides.find((item) => item.id === pendingGuideEdit?.guideId)
+        : null;
+      if (!guide) {
+        clearBuilderStepPins();
+        return;
+      }
+      renderBuilderStepPins(guide, pendingGuideEdit?.stepId || "");
+    } catch {
+      clearBuilderStepPins();
+    }
+  }
+
+  function scheduleBuilderPins() {
+    if (!["builder-selecting-target", "editing-step"].includes(mode) || builderPinsRaf) return;
+    builderPinsRaf = requestAnimationFrame(() => {
+      builderPinsRaf = null;
+      renderBuilderPinsForPending();
+    });
+  }
+
+  function onOverlayPositionChange() {
+    scheduleReposition();
+    scheduleBuilderPins();
+  }
+
+  function enableOverlayPositionListeners() {
+    if (overlayPositionListenersActive) return;
+    document.addEventListener("scroll", onOverlayPositionChange, { passive: true, capture: true });
+    window.addEventListener("resize", onOverlayPositionChange);
+    overlayPositionListenersActive = true;
+  }
+
+  function disableOverlayPositionListeners() {
+    if (!overlayPositionListenersActive) return;
+    document.removeEventListener("scroll", onOverlayPositionChange, { capture: true });
+    window.removeEventListener("resize", onOverlayPositionChange);
+    overlayPositionListenersActive = false;
   }
 
   function positionPopup(popup, rect, placement) {
@@ -818,6 +979,7 @@
     layer.append(inlineEditor);
     positionPopup(inlineEditor, rect, "auto");
     mode = "editing-step";
+    renderBuilderPinsForPending();
     title.focus({ preventScroll: true });
   }
 
@@ -870,9 +1032,12 @@
       ]);
       removeInlineEditor();
       mode = "idle";
-      if (builderSession) {
-        showSelectionToast("Step saved. Continue to the next page.", 4200);
+      if (builderSession?.status === "waitingForUrl") {
+        showBuilderBar("Step saved. Continue to the next page.");
         watchBuilderResumeSession();
+      } else if (builderSession) {
+        showSelectionToast("Step saved. Select the next target or click Done.", 2400);
+        showBuilderBar("Select the next target");
         resumeBuilderSessionIfReady();
       } else {
         clearBuilderUrlWatch();
@@ -887,8 +1052,11 @@
     removeInlineEditor();
     mode = "idle";
     clearBuilderUrlWatch();
+    disableOverlayPositionListeners();
+    clearBuilderStepPins();
     await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
     hideSelectionToast();
+    removeBuilderBar();
   }
 
   async function resumeBuilderSessionIfReady() {
@@ -920,7 +1088,13 @@
         },
       });
       await removeLocalStorage(["activeBuilderSession", "selectedGuideTarget"]);
-      startSelectMode("Choose what the next step should point to");
+      const matchedMessage = activeBuilderSession.status === "waitingForUrl"
+        ? "URL matched. Select the next target."
+        : "Select the next target";
+      if (activeBuilderSession.status === "waitingForUrl") {
+        showSelectionToast("URL matched. Select the next target.", 2400);
+      }
+      startSelectMode(matchedMessage);
     } catch {}
   }
 
@@ -955,6 +1129,7 @@
   function showCompletionCelebration() {
     mode = "idle";
     activePlayback = null;
+    disableOverlayPositionListeners();
     if (urlWatchTimer) clearInterval(urlWatchTimer);
     urlWatchTimer = null;
     const layer = ensureOverlayLayer();
@@ -973,7 +1148,7 @@
     celebrationTimer = setTimeout(clearOverlay, 4300);
   }
 
-  async function renderPlaybackStep() {
+  async function renderPlaybackStep({ autoScroll = true } = {}) {
     if (!activePlayback) return;
     const { guide, stepIndex } = activePlayback;
     const step = guide.steps[stepIndex];
@@ -983,11 +1158,11 @@
       renderMissingStep(step);
       return;
     }
-    if (resolvedTarget.element && step.playback?.autoScroll !== false && !isElementVisible(resolvedTarget.element)) {
+    if (autoScroll && resolvedTarget.element && step.playback?.autoScroll !== false && !isElementVisible(resolvedTarget.element)) {
       resolvedTarget.element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
       await new Promise((resolve) => setTimeout(resolve, 420));
     }
-    if (resolvedTarget.rectFallback && step.playback?.autoScroll !== false) {
+    if (autoScroll && resolvedTarget.rectFallback && step.playback?.autoScroll !== false) {
       window.scrollTo({
         top: Math.max(0, resolvedTarget.rect.documentY - window.innerHeight / 2),
         behavior: "smooth",
@@ -996,9 +1171,7 @@
     }
 
     const layer = ensureOverlayLayer();
-    const rect = resolvedTarget.element
-      ? resolvedTarget.element.getBoundingClientRect()
-      : getFallbackRect(step);
+    const rect = getResolvedTargetRect(resolvedTarget, step);
     preparePlaybackLayer(layer, Boolean(step.playback?.dimPage));
     positionDimLayer(layer, rect, resolvedTarget.rectFallback);
     if (step.playback?.highlightTarget !== false) {
@@ -1129,6 +1302,7 @@
   function stopPlayback() {
     mode = "idle";
     activePlayback = null;
+    disableOverlayPositionListeners();
     clearOverlay();
   }
 
@@ -1136,14 +1310,36 @@
     if (repositionRaf || mode !== "playing-guide") return;
     repositionRaf = requestAnimationFrame(() => {
       repositionRaf = null;
-      renderPlaybackStep();
+      renderPlaybackStep({ autoScroll: false });
     });
   }
 
   function startSelectMode(message = "Choose what this step should point to") {
     stopPlayback();
     mode = "builder-selecting-target";
+    enableOverlayPositionListeners();
+    lastBuilderPinsUrl = normalizeGuideUrl(window.location.href);
+    showBuilderBar(message === "Choose what this step should point to" ? "Select the next target" : message);
+    renderBuilderPinsForPending();
     showSelectionToast(message);
+  }
+
+  function showBuilderBar(message = "Select the next target") {
+    document.getElementById("click-guide-builder-bar")?.remove();
+    const bar = createNode("div", { id: "click-guide-builder-bar" }, [
+      createNode("div", { className: "click-guide-builder-text" }, [
+        createNode("strong", { textContent: "Editing guide" }),
+        createNode("span", { textContent: message }),
+      ]),
+      createNode("button", { type: "button", textContent: "Done", onClick: finishBuilderSession }),
+      createNode("button", { type: "button", textContent: "Exit editing", onClick: cancelSelectMode }),
+    ]);
+    bar.addEventListener("click", (event) => event.stopPropagation());
+    document.body.appendChild(bar);
+  }
+
+  function removeBuilderBar() {
+    document.getElementById("click-guide-builder-bar")?.remove();
   }
 
   function showSelectionToast(message, durationMs = 0) {
@@ -1157,11 +1353,26 @@
     }
   }
 
+  async function finishBuilderSession() {
+    mode = "idle";
+    clearHover();
+    clearBuilderUrlWatch();
+    disableOverlayPositionListeners();
+    removeInlineEditor();
+    removeBuilderBar();
+    clearBuilderStepPins();
+    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
+    showSelectionToast("Guide editing finished.", 2400);
+  }
+
   function cancelSelectMode() {
     mode = "idle";
     clearHover();
     hideSelectionToast();
+    removeBuilderBar();
+    clearBuilderStepPins();
     clearBuilderUrlWatch();
+    disableOverlayPositionListeners();
     safeStorage(() =>
       chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]),
     );
@@ -1231,9 +1442,6 @@
     },
     true,
   );
-  document.addEventListener("scroll", scheduleReposition, { passive: true, capture: true });
-  window.addEventListener("resize", scheduleReposition);
-
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message.type === "CLICK_GUIDE_PING") {
       sendResponse({ loaded: true, mode });
@@ -1246,6 +1454,7 @@
     }
     if (message.type === "CLICK_GUIDE_START_PLAYBACK") {
       mode = "playing-guide";
+      enableOverlayPositionListeners();
       activePlayback = { guide: message.guide, stepIndex: message.stepIndex || 0, tabId: message.tabId };
       renderPlaybackStep().then(() => sendResponse({ ok: true }));
       return true;
@@ -1263,6 +1472,7 @@
       if (!stored?.guide) return;
       chrome.storage.local.remove("activePlayback");
       mode = "playing-guide";
+      enableOverlayPositionListeners();
       activePlayback = { guide: stored.guide, stepIndex: stored.stepIndex || 0, tabId: stored.tabId };
       renderPlaybackStep();
     }),

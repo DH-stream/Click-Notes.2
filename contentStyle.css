@@ -375,6 +375,85 @@
   pointer-events: none;
 }
 
+.click-guide-step-pin {
+  position: absolute;
+  z-index: 2147483646;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: rgba(0, 111, 214, 0.86);
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 72, 141, 0.2);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.click-guide-step-pin-active {
+  background: rgba(28, 27, 27, 0.82);
+}
+
+#click-guide-builder-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 12px;
+  z-index: 2147483647;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  padding: 8px 10px 8px 12px;
+  border: 1px solid rgba(194, 198, 212, 0.68);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1c1b1b;
+  box-shadow: 0 14px 40px rgba(28, 27, 27, 0.16);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+}
+
+.click-guide-builder-text {
+  display: grid;
+  gap: 1px;
+  min-width: 180px;
+}
+
+.click-guide-builder-text strong {
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.click-guide-builder-text span {
+  color: #5e5e5e;
+  font-size: 11px;
+  line-height: 14px;
+}
+
+#click-guide-builder-bar button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #f0f1f4;
+  color: #1c1b1b;
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+#click-guide-builder-bar button:first-of-type {
+  background: #006fd6;
+  color: #fff;
+}
+
 #click-guide-celebration {
   position: fixed;
   left: 50%;
@@ -508,6 +587,8 @@
   .click-guide-target-highlight,
   #click-guide-popup,
   #click-guide-inline-editor,
+  #click-guide-builder-bar,
+  .click-guide-step-pin,
   #click-guide-celebration,
   .click-guide-celebration-burst span {
     animation: none;

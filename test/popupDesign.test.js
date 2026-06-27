@@ -33,3 +33,45 @@ test("URL completion uses the shared matcher and keeps manual fallback", () => {
   assert.doesNotMatch(contentScript, /window\.location\.href\.includes\(step\.advance\.value\)/);
   assert.match(contentScript, /Continue anyway/);
 });
+
+
+test("playback validates weak resolved targets before using saved position", () => {
+  assert.match(contentScript, /function isResolvedElementTrustworthy/);
+  assert.match(contentScript, /genericSelectorClasses = new Set/);
+  assert.match(contentScript, /"hide-sm"/);
+  assert.match(contentScript, /selectorMatchCount\(selector\)/);
+  assert.match(contentScript, /distance > allowedDistance/);
+  assert.match(contentScript, /getFallbackRect\(step\)/);
+});
+
+test("builder session exposes simple continuous editing controls", () => {
+  assert.match(contentScript, /showBuilderBar/);
+  assert.match(contentScript, /Editing guide/);
+  assert.match(contentScript, /Select the next target/);
+  assert.match(contentScript, /Step saved\. Select the next target or click Done\./);
+  assert.match(contentScript, /Step saved\. Continue to the next page\./);
+  assert.match(contentScript, /URL matched\. Select the next target\./);
+  assert.match(contentScript, /Guide editing finished\./);
+  assert.match(contentStyle, /#click-guide-builder-bar/);
+});
+
+
+test("playback repositions overlays without autoscroll on scroll", () => {
+  assert.match(contentScript, /async function renderPlaybackStep\(\{ autoScroll = true \} = \{\}\)/);
+  assert.match(contentScript, /renderPlaybackStep\(\{ autoScroll: false \}\)/);
+  assert.match(contentScript, /function getResolvedTargetRect/);
+  assert.match(contentScript, /positionDimLayer\(layer, rect, resolvedTarget\.rectFallback\)/);
+  assert.match(contentScript, /function enableOverlayPositionListeners/);
+  assert.match(contentScript, /function disableOverlayPositionListeners/);
+  assert.match(contentScript, /removeEventListener\("scroll", onOverlayPositionChange/);
+});
+
+test("builder editing shows non-blocking numbered saved-step pins", () => {
+  assert.match(contentScript, /function renderBuilderStepPins/);
+  assert.match(contentScript, /normalizeGuideUrl\(step\?\.pageUrl \|\| step\?\.target\?\.pageUrl \|\| ""\)/);
+  assert.match(contentScript, /resolvePlaybackTarget\(step\)/);
+  assert.match(contentScript, /pin\.textContent = String\(step\.order \|\| index \+ 1\)/);
+  assert.match(contentScript, /clearBuilderStepPins\(\)/);
+  assert.match(contentStyle, /\.click-guide-step-pin\s*\{/);
+  assert.match(contentStyle, /pointer-events: none/);
+});
