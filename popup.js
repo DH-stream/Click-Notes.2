@@ -5,6 +5,7 @@ const panel = document.getElementById("panel");
 const {
   createGuide,
   createStep,
+  getTargetDisplayLabel,
   normalizeGuide,
   normalizeGuideUrl,
   normalizeStep,
@@ -21,6 +22,21 @@ let state = {
 
 function setStatus(message) {
   statusEl.textContent = message || "";
+}
+
+const importErrorMessages = new Set([
+  "This guide file could not be read.",
+  "This guide file is missing steps.",
+  "This guide file is missing a title.",
+  "This guide file is missing a start page.",
+  "This guide file has an unsafe start page.",
+  "One step is missing its instructions.",
+  "One step is missing a saved target.",
+]);
+
+function getImportErrorMessage(error) {
+  const message = String(error?.message || "");
+  return importErrorMessages.has(message) ? message : "This guide file could not be imported.";
 }
 
 function el(tag, props = {}, children = []) {
@@ -163,7 +179,7 @@ function renderEditor() {
   guide.steps.forEach((step, index) => {
     app.append(el("div", { className: "step-row" }, [
       el("div", { className: "row-title", textContent: `${index + 1}. ${step.title || "Untitled step"}` }),
-      el("div", { className: "muted", textContent: step.target?.selector || "No selector" }),
+      el("div", { className: "muted", textContent: getTargetDisplayLabel(step.target) }),
       el("div", { className: "row-actions" }, [
         button("Edit", () => {
           state.editingStepId = step.id;
@@ -171,7 +187,7 @@ function renderEditor() {
           state.view = "step";
           render();
         }, "small"),
-        button("Retarget", () => selectStepTarget(guide.id, step.id), "small"),
+        button("Choose again", () => selectStepTarget(guide.id, step.id), "small"),
         button("Up", () => moveStep(guide.id, step.id, -1), "small"),
         button("Down", () => moveStep(guide.id, step.id, 1), "small"),
         button("Delete", () => deleteStep(guide.id, step.id), "small danger"),
@@ -202,24 +218,49 @@ function renderStepEditor() {
   const body = el("textarea", { id: "stepBody", placeholder: "Instruction body" });
   body.value = step.body || "";
   const placement = el("select", { id: "popupPlacement" });
-  ["auto", "top", "right", "bottom", "left"].forEach((value) => {
-    const option = el("option", { value, textContent: value });
+  [
+    ["auto", "Best fit"],
+    ["top", "Above"],
+    ["right", "Right"],
+    ["bottom", "Below"],
+    ["left", "Left"],
+  ].forEach(([value, label]) => {
+    const option = el("option", { value, textContent: label });
     option.selected = (step.playback?.popupPlacement || "auto") === value;
     placement.append(option);
   });
   const advanceMode = el("select", { id: "advanceMode" });
-  ["manual", "urlMatch", "elementVisible"].forEach((value) => {
-    const option = el("option", { value, textContent: value });
+  const advanceOptions = [
+    ["manual", "Continue manually"],
+    ["urlMatch", "After opening a page"],
+  ];
+  if (step.advance?.mode === "elementVisible" && step.advance.value) {
+    advanceOptions.push(["elementVisible", "When part of the page appears"]);
+  }
+  advanceOptions.forEach(([value, label]) => {
+    const option = el("option", { value, textContent: label });
     option.selected = (step.advance?.mode || "manual") === value;
     advanceMode.append(option);
   });
-  const advanceValue = el("input", { id: "advanceValue", type: "text", placeholder: "URL contains or selector" });
+  const advanceValue = el("input", {
+    id: "advanceValue",
+    type: "text",
+    placeholder: "Example: /dashboard",
+  });
   advanceValue.value = step.advance?.value || "";
+  const advanceValueField = field("Page to continue on", advanceValue);
+  const updateAdvanceValueVisibility = () => {
+    advanceValueField.classList.toggle("hidden", advanceMode.value !== "urlMatch");
+  };
+  advanceMode.addEventListener("change", updateAdvanceValueVisibility);
+  updateAdvanceValueVisibility();
 
   const weakHint = step.target?.selectorConfidence === "weak"
     ? el("div", {
         className: "hint",
-        textContent: `Weak selector. For a more reliable guide, add data-guide-id="..." or data-note="..." to this element.`,
+        textContent:
+          "Saved position fallback available. This target may move if the page changes. " +
+          "Click Guide will still try to show this step near the saved area.",
       })
     : document.createTextNode("");
 
@@ -234,7 +275,10 @@ function renderStepEditor() {
   ]));
   app.append(el("div", { className: "section" }, [
     el("h1", { textContent: guide?.title || "Guide" }),
-    el("div", { className: "muted", textContent: step.target?.selector || "No target selected" }),
+    el("div", {
+      className: "muted",
+      textContent: `Step target: ${getTargetDisplayLabel(step.target)}`,
+    }),
     weakHint,
     field("Title", title),
     field("Body / instruction", body),
@@ -244,11 +288,11 @@ function renderStepEditor() {
       (step.playback?.showInstructionText ?? step.playback?.showPopup) !== false,
     ),
     checkbox("highlightTarget", "Highlight target", step.playback?.highlightTarget !== false),
-    checkbox("autoScroll", "Scroll automatically to element", step.playback?.autoScroll !== false),
+    checkbox("autoScroll", "Bring the target into view", step.playback?.autoScroll !== false),
     checkbox("dimPage", "Dim rest of page", step.playback?.dimPage !== false),
-    field("Popup placement", placement),
-    field("Advance", advanceMode),
-    field("Advance value", advanceValue),
+    field("Where instructions appear", placement),
+    field("Move to the next step", advanceMode),
+    advanceValueField,
   ]));
 }
 
@@ -299,7 +343,7 @@ async function playGuide(guideId) {
   let tab = await getActiveTab();
   if (!tab?.id) return;
   const safeFirstPageUrl = safeGuideUrl(guide.startUrl);
-  if (!safeFirstPageUrl) return setStatus("Guide has no safe start URL");
+  if (!safeFirstPageUrl) return setStatus("This guide does not have a start page.");
   if (normalizeGuideUrl(tab.url || "") !== safeFirstPageUrl) {
     await chrome.tabs.update(tab.id, { url: safeFirstPageUrl });
     await waitForTabComplete(tab.id);
@@ -356,7 +400,7 @@ async function handleImport(file) {
     render();
     await playGuide(imported.id);
   } catch (error) {
-    setStatus(error?.message || "Import failed");
+    setStatus(getImportErrorMessage(error));
   } finally {
     importFile.value = "";
   }

@@ -45,6 +45,7 @@
       }
     });
   const upsertGuideStep = utils.upsertGuideStep;
+  const getTargetDisplayLabel = utils.getTargetDisplayLabel || (() => "Step target");
   const createBuilderResumeSession = utils.createBuilderResumeSession;
   const shouldResumeBuilderSession = utils.shouldResumeBuilderSession;
 
@@ -650,8 +651,10 @@
 
   function createInlineSelect(name, options, selectedValue) {
     const select = createNode("select", { name });
-    options.forEach((value) => {
-      const option = createNode("option", { value, textContent: value });
+    options.forEach((item) => {
+      const value = typeof item === "string" ? item : item.value;
+      const label = typeof item === "string" ? item : item.label;
+      const option = createNode("option", { value, textContent: label });
       option.selected = value === selectedValue;
       select.append(option);
     });
@@ -721,20 +724,51 @@
       (existing?.playback?.showInstructionText ?? existing?.playback?.showPopup) !== false;
     const placement = createInlineSelect(
       "popupPlacement",
-      ["auto", "top", "right", "bottom", "left"],
+      [
+        { value: "auto", label: "Best fit" },
+        { value: "top", label: "Above" },
+        { value: "right", label: "Right" },
+        { value: "bottom", label: "Below" },
+        { value: "left", label: "Left" },
+      ],
       existing?.playback?.popupPlacement || "auto",
     );
+    const advanceOptions = [
+      { value: "manual", label: "Continue manually" },
+      { value: "urlMatch", label: "After opening a page" },
+    ];
+    if (existing?.advance?.mode === "elementVisible" && existing.advance.value) {
+      advanceOptions.push({
+        value: "elementVisible",
+        label: "When part of the page appears",
+      });
+    }
     const advanceMode = createInlineSelect(
       "advanceMode",
-      ["manual", "urlMatch", "elementVisible"],
+      advanceOptions,
       existing?.advance?.mode || (suggestedLinkMatch ? "urlMatch" : "manual"),
     );
     const advanceValue = createNode("input", {
       type: "text",
       name: "advanceValue",
-      placeholder: "URL contains or selector",
+      placeholder: "Example: /dashboard",
     });
     advanceValue.value = existing?.advance?.value || (!existing ? suggestedLinkMatch : "");
+    const advanceValueField = createInlineField("Page to continue on", advanceValue);
+    const updateAdvanceValueVisibility = () => {
+      advanceValueField.hidden = advanceMode.value !== "urlMatch";
+    };
+    advanceMode.addEventListener("change", updateAdvanceValueVisibility);
+    updateAdvanceValueVisibility();
+    const weakTargetHint =
+      payload?.selectorConfidence === "weak"
+        ? createNode("div", {
+            className: "click-guide-warning",
+            textContent:
+              "Saved position fallback available. This target may move if the page changes. " +
+              "Click Guide will still try to show this step near the saved area.",
+          })
+        : document.createTextNode("");
 
     inlineEditor = createNode("form", { id: "click-guide-inline-editor" }, [
       createNode("button", {
@@ -744,8 +778,12 @@
         textContent: "x",
         onClick: cancelInlineStepEditor,
       }),
-      createNode("div", { className: "click-guide-eyebrow", textContent: "Click Guide" }),
+      createNode("div", {
+        className: "click-guide-eyebrow",
+        textContent: `Step target: ${getTargetDisplayLabel(payload)}`,
+      }),
       createNode("h2", { textContent: existing ? "Edit step" : "New step" }),
+      weakTargetHint,
       createInlineField("Title", title),
       createInlineField("Body", body),
       createInlineCheckbox("showInstructionText", "Show instruction text", showInstructionText),
@@ -754,11 +792,11 @@
         "Highlight target",
         existing?.playback?.highlightTarget !== false,
       ),
-      createInlineCheckbox("autoScroll", "Scroll to element", existing?.playback?.autoScroll !== false),
+      createInlineCheckbox("autoScroll", "Bring the target into view", existing?.playback?.autoScroll !== false),
       createInlineCheckbox("dimPage", "Dim rest of page", existing?.playback?.dimPage !== false),
-      createInlineField("Popup", placement),
-      createInlineField("Advance", advanceMode),
-      createInlineField("Advance value", advanceValue),
+      createInlineField("Where instructions appear", placement),
+      createInlineField("Move to the next step", advanceMode),
+      advanceValueField,
       createNode("div", { className: "click-guide-actions" }, [
         createNode("button", {
           type: "button",
@@ -882,7 +920,7 @@
         },
       });
       await removeLocalStorage(["activeBuilderSession", "selectedGuideTarget"]);
-      startSelectMode("Select the next element for this guide");
+      startSelectMode("Choose what the next step should point to");
     } catch {}
   }
 
@@ -894,8 +932,8 @@
     card.className = "click-guide-missing";
     card.innerHTML = `
       <button class="click-guide-close" type="button" aria-label="Close">x</button>
-      <h2>Element not found</h2>
-      <p>This step may be outdated or the page may not have loaded yet.</p>
+      <h2>Target not found</h2>
+      <p>This part of the page may have changed or not loaded yet.</p>
       <div class="click-guide-actions">
         <button type="button" data-action="retry">Retry</button>
         <button type="button" data-action="skip">Skip step</button>
@@ -1010,7 +1048,7 @@
         if (resolvedTarget.rectFallback) {
           const warning = popup.querySelector(".click-guide-warning");
           warning.hidden = false;
-          warning.textContent = "Original element not found. Showing saved position.";
+          warning.textContent = "The page changed, so this step is shown near the saved spot.";
         }
       }
       popup.querySelector(".click-guide-count").textContent = `Step ${stepIndex + 1} of ${guide.steps.length}`;
@@ -1102,7 +1140,7 @@
     });
   }
 
-  function startSelectMode(message = "Select an element for this guide step") {
+  function startSelectMode(message = "Choose what this step should point to") {
     stopPlayback();
     mode = "builder-selecting-target";
     showSelectionToast(message);
@@ -1148,7 +1186,7 @@
       }
     } catch {}
     showSelectionToast(
-      `${selection.anchorMode === "rect" ? "Visual area" : "Element"} selected. Open Click Guide to write this step.`,
+      `${getTargetDisplayLabel(payload)} selected. Open Click Guide to write this step.`,
       6000,
     );
   }
