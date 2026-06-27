@@ -47,6 +47,8 @@
   const upsertGuideStep = utils.upsertGuideStep;
   const getTargetDisplayLabel = utils.getTargetDisplayLabel || (() => "Step target");
   const createBuilderResumeSession = utils.createBuilderResumeSession;
+  const createPendingNavigationConfirmation = utils.createPendingNavigationConfirmation;
+  const shouldShowNavigationConfirmation = utils.shouldShowNavigationConfirmation;
   const shouldResumeBuilderSession = utils.shouldResumeBuilderSession;
 
   let mode = "idle";
@@ -294,7 +296,8 @@
       element.closest("#click-guide-overlay-layer") ||
         element.closest("#click-guide-inline-editor") ||
         element.closest("#click-guide-selection-toast") ||
-        element.closest("#click-guide-builder-bar"),
+        element.closest("#click-guide-builder-bar") ||
+        element.closest("#click-guide-navigation-confirmation"),
     );
   }
 
@@ -1018,17 +1021,32 @@
         pendingGuideEdit.stepId,
         fields,
       );
+      const savedGuide = nextGuides[guideIndex];
+      const savedStep = pendingGuideEdit.stepId
+        ? savedGuide.steps.find((step) => step.id === pendingGuideEdit.stepId)
+        : savedGuide.steps[savedGuide.steps.length - 1];
       const builderSession = createBuilderResumeSession
         ? createBuilderResumeSession(pendingGuideEdit.guideId, fields)
         : null;
+      const pendingNavigationConfirmation =
+        savedStep?.advance?.mode !== "manual" || !createPendingNavigationConfirmation
+          ? null
+          : createPendingNavigationConfirmation(
+              pendingGuideEdit.guideId,
+              savedStep?.id,
+              window.location.href,
+              pendingGuideEdit.tabId,
+            );
       await setLocalStorage({
         guides: nextGuides,
         ...(builderSession ? { activeBuilderSession: builderSession } : {}),
+        ...(pendingNavigationConfirmation ? { pendingNavigationConfirmation } : {}),
       });
       await removeLocalStorage([
         "pendingGuideEdit",
         "selectedGuideTarget",
         ...(builderSession ? [] : ["activeBuilderSession"]),
+        ...(pendingNavigationConfirmation ? [] : ["pendingNavigationConfirmation"]),
       ]);
       removeInlineEditor();
       mode = "idle";
@@ -1054,9 +1072,16 @@
     clearBuilderUrlWatch();
     disableOverlayPositionListeners();
     clearBuilderStepPins();
-    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
+    removeNavigationConfirmationPanel();
+    await removeLocalStorage([
+      "pendingGuideEdit",
+      "selectedGuideTarget",
+      "activeBuilderSession",
+      "pendingNavigationConfirmation",
+    ]);
     hideSelectionToast();
     removeBuilderBar();
+    removeNavigationConfirmationPanel();
   }
 
   async function resumeBuilderSessionIfReady() {
@@ -1095,6 +1120,124 @@
         showSelectionToast("URL matched. Select the next target.", 2400);
       }
       startSelectMode(matchedMessage);
+    } catch {}
+  }
+
+  function removeNavigationConfirmationPanel() {
+    document.getElementById("click-guide-navigation-confirmation")?.remove();
+  }
+
+  async function confirmNavigationCompletion(pending, safeUrlMatch) {
+    try {
+      const { guides } = await getLocalStorage({ guides: [] });
+      const nextGuides = Array.isArray(guides) ? guides.slice() : [];
+      const guideIndex = nextGuides.findIndex((guide) => guide.id === pending.guideId);
+      const guide = guideIndex >= 0 ? nextGuides[guideIndex] : null;
+      const stepIndex = guide?.steps?.findIndex((step) => step.id === pending.stepId) ?? -1;
+      if (!guide || stepIndex < 0) {
+        await removeLocalStorage("pendingNavigationConfirmation");
+        removeNavigationConfirmationPanel();
+        return;
+      }
+      const steps = guide.steps.slice();
+      steps[stepIndex] = {
+        ...steps[stepIndex],
+        advance: { mode: "urlMatch", value: safeUrlMatch, allowManualFallback: true },
+      };
+      nextGuides[guideIndex] = { ...guide, steps, updatedAt: new Date().toISOString() };
+      await setLocalStorage({
+        guides: nextGuides,
+        activeBuilderSession: {
+          guideId: pending.guideId,
+          status: "selecting",
+          tabId: pending.tabId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      await removeLocalStorage("pendingNavigationConfirmation");
+      removeNavigationConfirmationPanel();
+      showSelectionToast("Page change saved. Select the next target or click Done.", 2400);
+      startSelectMode("Select the next target");
+    } catch {
+      showSelectionToast("Could not save page change.", 5000);
+    }
+  }
+
+  async function declineNavigationCompletion(pending) {
+    try {
+      await setLocalStorage({
+        activeBuilderSession: {
+          guideId: pending.guideId,
+          status: "selecting",
+          tabId: pending.tabId,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      await removeLocalStorage("pendingNavigationConfirmation");
+      removeNavigationConfirmationPanel();
+      showSelectionToast("Step kept manual. Select the next target or click Done.", 2400);
+      startSelectMode("Select the next target");
+    } catch {
+      showSelectionToast("Could not keep step manual.", 5000);
+    }
+  }
+
+  function renderNavigationConfirmation(pending, safeUrlMatch) {
+    removeNavigationConfirmationPanel();
+    showBuilderBar("Select the next target or click Done");
+    const panel = createNode("div", { id: "click-guide-navigation-confirmation" }, [
+      createNode("strong", { textContent: "The page changed after this step." }),
+      createNode("span", {
+        textContent: "Should this step complete when the user reaches this page?",
+      }),
+      createNode("div", { className: "click-guide-actions" }, [
+        createNode("button", {
+          type: "button",
+          textContent: "Yes, use this page change",
+          onClick: () => confirmNavigationCompletion(pending, safeUrlMatch),
+        }),
+        createNode("button", {
+          type: "button",
+          textContent: "No, keep manual",
+          onClick: () => declineNavigationCompletion(pending),
+        }),
+      ]),
+    ]);
+    panel.addEventListener("click", (event) => event.stopPropagation());
+    document.body.appendChild(panel);
+  }
+
+  async function checkPendingNavigationConfirmation() {
+    if (mode === "playing-guide" || !shouldShowNavigationConfirmation) return;
+    try {
+      const { pendingNavigationConfirmation, guides } = await getLocalStorage({
+        pendingNavigationConfirmation: null,
+        guides: [],
+      });
+      if (!pendingNavigationConfirmation) return;
+      if (!shouldShowNavigationConfirmation(pendingNavigationConfirmation, window.location.href)) {
+        if (Number(pendingNavigationConfirmation.expiresAt) <= Date.now()) {
+          await removeLocalStorage("pendingNavigationConfirmation");
+        }
+        return;
+      }
+      const guide = Array.isArray(guides)
+        ? guides.find((item) => item.id === pendingNavigationConfirmation.guideId)
+        : null;
+      const step = guide?.steps?.find((item) => item.id === pendingNavigationConfirmation.stepId);
+      if (!step || step.advance?.mode === "urlMatch") {
+        await removeLocalStorage("pendingNavigationConfirmation");
+        return;
+      }
+      const safeUrlMatch = deriveSafeUrlMatch(window.location.href);
+      if (!safeUrlMatch) {
+        await removeLocalStorage("pendingNavigationConfirmation");
+        return;
+      }
+      mode = "navigation-confirmation";
+      renderNavigationConfirmation(pendingNavigationConfirmation, safeUrlMatch);
     } catch {}
   }
 
@@ -1360,8 +1503,14 @@
     disableOverlayPositionListeners();
     removeInlineEditor();
     removeBuilderBar();
+    removeNavigationConfirmationPanel();
     clearBuilderStepPins();
-    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
+    await removeLocalStorage([
+      "pendingGuideEdit",
+      "selectedGuideTarget",
+      "activeBuilderSession",
+      "pendingNavigationConfirmation",
+    ]);
     showSelectionToast("Guide editing finished.", 2400);
   }
 
@@ -1374,7 +1523,12 @@
     clearBuilderUrlWatch();
     disableOverlayPositionListeners();
     safeStorage(() =>
-      chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]),
+      chrome.storage.local.remove([
+        "pendingGuideEdit",
+        "selectedGuideTarget",
+        "activeBuilderSession",
+        "pendingNavigationConfirmation",
+      ]),
     );
   }
 
@@ -1383,6 +1537,7 @@
     mode = "idle";
     clearHover();
     try {
+      await removeLocalStorage("pendingNavigationConfirmation");
       await setLocalStorage({ selectedGuideTarget: payload });
       const { pendingGuideEdit, guides } = await getLocalStorage({
         pendingGuideEdit: null,
@@ -1479,6 +1634,7 @@
   );
 
   safeStorage(() => {
+    checkPendingNavigationConfirmation();
     resumeBuilderSessionIfReady();
     watchBuilderResumeSession();
   });
