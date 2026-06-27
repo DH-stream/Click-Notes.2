@@ -285,7 +285,8 @@
     return Boolean(
       element.closest("#click-guide-overlay-layer") ||
         element.closest("#click-guide-inline-editor") ||
-        element.closest("#click-guide-selection-toast"),
+        element.closest("#click-guide-selection-toast") ||
+        element.closest("#click-guide-builder-bar"),
     );
   }
 
@@ -465,6 +466,79 @@
     );
   }
 
+  const genericSelectorClasses = new Set([
+    "hide-sm",
+    "show-sm",
+    "container",
+    "wrapper",
+    "layout",
+    "clearfix",
+    "sr-only",
+    "visually-hidden",
+    "d-flex",
+    "flex",
+    "grid",
+    "row",
+    "col",
+  ]);
+
+  function hasSavedVisualAnchor(step) {
+    const target = step?.target || {};
+    const rect = target.rect || {};
+    const anchor = target.anchorPoint || {};
+    return (
+      (Number(rect.width) > 0 && Number(rect.height) > 0) ||
+      (Number.isFinite(Number(anchor.documentX)) && Number.isFinite(Number(anchor.documentY)))
+    );
+  }
+
+  function selectorMatchCount(selector) {
+    if (!selector) return 0;
+    try {
+      return document.querySelectorAll(selector).length;
+    } catch {
+      return 0;
+    }
+  }
+
+  function isGenericSelector(selector) {
+    const value = String(selector || "").trim();
+    if (!value) return true;
+    if (/^([a-z][a-z0-9-]*)?\.[a-zA-Z0-9_-]+$/.test(value)) {
+      const className = value.split(".").pop();
+      return genericSelectorClasses.has(className);
+    }
+    const classMatches = [...value.matchAll(/\.([a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
+    return Boolean(classMatches.length) && classMatches.every((item) => genericSelectorClasses.has(item));
+  }
+
+  function isResolvedElementTrustworthy(element, step) {
+    if (!(element instanceof HTMLElement)) return false;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    if (rect.width >= window.innerWidth * 0.95 || rect.height >= window.innerHeight * 0.95) return false;
+    const target = step?.target || {};
+    const pageUrl = target.pageUrl || step?.pageUrl || "";
+    const samePage = !pageUrl || normalizeGuideUrl(window.location.href) === normalizeGuideUrl(pageUrl);
+    if (!samePage) return true;
+    const selector = target.selector || "";
+    const matchCount = selectorMatchCount(selector);
+    const confidence = target.selectorConfidence || "weak";
+    const isStrongEnough = ["strong", "medium"].includes(confidence) && matchCount === 1 && !isGenericSelector(selector);
+    if (isStrongEnough) return true;
+    if (!hasSavedVisualAnchor(step)) return !isGenericSelector(selector) && matchCount <= 1;
+    const savedRect = getFallbackRect(step);
+    if (!savedRect) return false;
+    const liveCenterX = rect.left + rect.width / 2 + window.scrollX;
+    const liveCenterY = rect.top + rect.height / 2 + window.scrollY;
+    const savedCenterX = savedRect.documentX + savedRect.width / 2;
+    const savedCenterY = savedRect.documentY + savedRect.height / 2;
+    const distance = Math.hypot(liveCenterX - savedCenterX, liveCenterY - savedCenterY);
+    const allowedDistance = Math.max(160, Math.min(window.innerWidth, window.innerHeight) * 0.35);
+    if (distance > allowedDistance) return false;
+    return !isGenericSelector(selector) && matchCount <= 1;
+  }
+
   function findTargetElement(step) {
     const target = step?.target || {};
     const attempts = [target.selector, target.fallbackPath].filter(Boolean);
@@ -570,7 +644,7 @@
     }
 
     const element = findTargetElement(step);
-    if (element) return { element, rectFallback: false };
+    if (element && isResolvedElementTrustworthy(element, step)) return { element, rectFallback: false };
     if (!isSafeRectFallback(step)) return null;
     const rect = getFallbackRect(step);
     return rect ? { rect, rectFallback: true } : null;
@@ -870,9 +944,12 @@
       ]);
       removeInlineEditor();
       mode = "idle";
-      if (builderSession) {
-        showSelectionToast("Step saved. Continue to the next page.", 4200);
+      if (builderSession?.status === "waitingForUrl") {
+        showBuilderBar("Step saved. Continue to the next page.");
         watchBuilderResumeSession();
+      } else if (builderSession) {
+        showSelectionToast("Step saved. Select the next target or click Done.", 2400);
+        showBuilderBar("Select the next target");
         resumeBuilderSessionIfReady();
       } else {
         clearBuilderUrlWatch();
@@ -889,6 +966,7 @@
     clearBuilderUrlWatch();
     await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
     hideSelectionToast();
+    removeBuilderBar();
   }
 
   async function resumeBuilderSessionIfReady() {
@@ -920,7 +998,13 @@
         },
       });
       await removeLocalStorage(["activeBuilderSession", "selectedGuideTarget"]);
-      startSelectMode("Choose what the next step should point to");
+      const matchedMessage = activeBuilderSession.status === "waitingForUrl"
+        ? "URL matched. Select the next target."
+        : "Select the next target";
+      if (activeBuilderSession.status === "waitingForUrl") {
+        showSelectionToast("URL matched. Select the next target.", 2400);
+      }
+      startSelectMode(matchedMessage);
     } catch {}
   }
 
@@ -1143,7 +1227,26 @@
   function startSelectMode(message = "Choose what this step should point to") {
     stopPlayback();
     mode = "builder-selecting-target";
+    showBuilderBar(message === "Choose what this step should point to" ? "Select the next target" : message);
     showSelectionToast(message);
+  }
+
+  function showBuilderBar(message = "Select the next target") {
+    document.getElementById("click-guide-builder-bar")?.remove();
+    const bar = createNode("div", { id: "click-guide-builder-bar" }, [
+      createNode("div", { className: "click-guide-builder-text" }, [
+        createNode("strong", { textContent: "Editing guide" }),
+        createNode("span", { textContent: message }),
+      ]),
+      createNode("button", { type: "button", textContent: "Done", onClick: finishBuilderSession }),
+      createNode("button", { type: "button", textContent: "Exit editing", onClick: cancelSelectMode }),
+    ]);
+    bar.addEventListener("click", (event) => event.stopPropagation());
+    document.body.appendChild(bar);
+  }
+
+  function removeBuilderBar() {
+    document.getElementById("click-guide-builder-bar")?.remove();
   }
 
   function showSelectionToast(message, durationMs = 0) {
@@ -1157,10 +1260,21 @@
     }
   }
 
+  async function finishBuilderSession() {
+    mode = "idle";
+    clearHover();
+    clearBuilderUrlWatch();
+    removeInlineEditor();
+    removeBuilderBar();
+    await removeLocalStorage(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]);
+    showSelectionToast("Guide editing finished.", 2400);
+  }
+
   function cancelSelectMode() {
     mode = "idle";
     clearHover();
     hideSelectionToast();
+    removeBuilderBar();
     clearBuilderUrlWatch();
     safeStorage(() =>
       chrome.storage.local.remove(["pendingGuideEdit", "selectedGuideTarget", "activeBuilderSession"]),

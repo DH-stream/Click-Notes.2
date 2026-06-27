@@ -33,3 +33,24 @@ test("URL completion uses the shared matcher and keeps manual fallback", () => {
   assert.doesNotMatch(contentScript, /window\.location\.href\.includes\(step\.advance\.value\)/);
   assert.match(contentScript, /Continue anyway/);
 });
+
+
+test("playback validates weak resolved targets before using saved position", () => {
+  assert.match(contentScript, /function isResolvedElementTrustworthy/);
+  assert.match(contentScript, /genericSelectorClasses = new Set/);
+  assert.match(contentScript, /"hide-sm"/);
+  assert.match(contentScript, /selectorMatchCount\(selector\)/);
+  assert.match(contentScript, /distance > allowedDistance/);
+  assert.match(contentScript, /getFallbackRect\(step\)/);
+});
+
+test("builder session exposes simple continuous editing controls", () => {
+  assert.match(contentScript, /showBuilderBar/);
+  assert.match(contentScript, /Editing guide/);
+  assert.match(contentScript, /Select the next target/);
+  assert.match(contentScript, /Step saved\. Select the next target or click Done\./);
+  assert.match(contentScript, /Step saved\. Continue to the next page\./);
+  assert.match(contentScript, /URL matched\. Select the next target\./);
+  assert.match(contentScript, /Guide editing finished\./);
+  assert.match(contentStyle, /#click-guide-builder-bar/);
+});
