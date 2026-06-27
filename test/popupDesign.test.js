@@ -54,3 +54,24 @@ test("builder session exposes simple continuous editing controls", () => {
   assert.match(contentScript, /Guide editing finished\./);
   assert.match(contentStyle, /#click-guide-builder-bar/);
 });
+
+
+test("playback repositions overlays without autoscroll on scroll", () => {
+  assert.match(contentScript, /async function renderPlaybackStep\(\{ autoScroll = true \} = \{\}\)/);
+  assert.match(contentScript, /renderPlaybackStep\(\{ autoScroll: false \}\)/);
+  assert.match(contentScript, /function getResolvedTargetRect/);
+  assert.match(contentScript, /positionDimLayer\(layer, rect, resolvedTarget\.rectFallback\)/);
+  assert.match(contentScript, /function enableOverlayPositionListeners/);
+  assert.match(contentScript, /function disableOverlayPositionListeners/);
+  assert.match(contentScript, /removeEventListener\("scroll", onOverlayPositionChange/);
+});
+
+test("builder editing shows non-blocking numbered saved-step pins", () => {
+  assert.match(contentScript, /function renderBuilderStepPins/);
+  assert.match(contentScript, /normalizeGuideUrl\(step\?\.pageUrl \|\| step\?\.target\?\.pageUrl \|\| ""\)/);
+  assert.match(contentScript, /resolvePlaybackTarget\(step\)/);
+  assert.match(contentScript, /pin\.textContent = String\(step\.order \|\| index \+ 1\)/);
+  assert.match(contentScript, /clearBuilderStepPins\(\)/);
+  assert.match(contentStyle, /\.click-guide-step-pin\s*\{/);
+  assert.match(contentStyle, /pointer-events: none/);
+});
