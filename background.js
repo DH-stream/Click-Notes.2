@@ -8,6 +8,17 @@ async function injectGuide(tabId) {
   } catch {}
 }
 
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== "CLICK_GUIDE_GET_CURRENT_TAB_ID") return false;
+  sendResponse({ tabId: sender.tab?.id });
+  return true;
+});
+
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const { activePlayback } = await chrome.storage.local.get({ activePlayback: null });
+  if (activePlayback?.tabId === tabId) await chrome.storage.local.remove("activePlayback");
+});
+
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   if (changeInfo.status !== "complete") return;
   const { activePlayback, activeBuilderSession } = await chrome.storage.local.get({

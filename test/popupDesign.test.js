@@ -6,6 +6,7 @@ const path = require("node:path");
 const root = path.join(__dirname, "..");
 const contentScript = fs.readFileSync(path.join(root, "contentScript.js"), "utf8");
 const contentStyle = fs.readFileSync(path.join(root, "contentStyle.css"), "utf8");
+const background = fs.readFileSync(path.join(root, "background.js"), "utf8");
 
 test("playback popup uses the compact step card structure", () => {
   assert.match(contentScript, /click-guide-card-body/);
@@ -57,13 +58,40 @@ test("builder session exposes simple continuous editing controls", () => {
 
 
 test("playback repositions overlays without autoscroll on scroll", () => {
-  assert.match(contentScript, /async function renderPlaybackStep\(\{ autoScroll = true \} = \{\}\)/);
+  assert.match(contentScript, /async function renderPlaybackStep\(\{ autoScroll = true, waitForTarget = false \} = \{\}\)/);
   assert.match(contentScript, /renderPlaybackStep\(\{ autoScroll: false \}\)/);
   assert.match(contentScript, /function getResolvedTargetRect/);
   assert.match(contentScript, /positionDimLayer\(layer, rect, resolvedTarget\.rectFallback\)/);
   assert.match(contentScript, /function enableOverlayPositionListeners/);
   assert.match(contentScript, /function disableOverlayPositionListeners/);
   assert.match(contentScript, /removeEventListener\("scroll", onOverlayPositionChange/);
+});
+
+test("playback waits for navigation targets and scroll settling", () => {
+  assert.match(contentScript, /resolvePlaybackTargetWithRetry/);
+  assert.match(contentScript, /waitForScrollSettle/);
+  assert.match(contentScript, /prefersReducedMotion/);
+  assert.match(contentScript, /behavior: prefersReducedMotion\(\) \? "auto" : "smooth"/);
+});
+
+test("persisted playback resumes only in its owning tab and clears when that tab closes", () => {
+  assert.match(contentScript, /CLICK_GUIDE_GET_CURRENT_TAB_ID/);
+  assert.match(contentScript, /currentTabId !== stored\.tabId/);
+  assert.match(background, /sender\.tab\?\.id/);
+  assert.match(background, /chrome\.tabs\.onRemoved\.addListener/);
+});
+
+test("final playback step only completes through an explicit action", () => {
+  assert.match(contentScript, /const isLastStep = stepIndex >= guide\.steps\.length - 1/);
+  assert.match(contentScript, /if \(!isLastStep\) watchAdvanceMode\(step\)/);
+  assert.match(contentScript, /event\.target\?\.closest\("\[data-action\]"\)/);
+  assert.match(contentScript, /clearAdvanceWatcher\(\)/);
+});
+
+test("exact and saved-position highlights have distinct polished styles", () => {
+  assert.match(contentScript, /click-guide-target-highlight-saved/);
+  assert.match(contentStyle, /\.click-guide-target-highlight-saved\s*\{/);
+  assert.match(contentStyle, /@media \(prefers-reduced-motion: reduce\)/);
 });
 
 test("builder editing shows non-blocking numbered saved-step pins", () => {

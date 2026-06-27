@@ -466,6 +466,21 @@
     return normalizedGuide;
   }
 
+  function getPlaybackResumeStepIndex(guide, stepIndex, currentUrl) {
+    const steps = Array.isArray(guide?.steps) ? guide.steps : [];
+    const safeIndex = Number.isInteger(stepIndex) && stepIndex >= 0 ? stepIndex : 0;
+    if (!steps.length || safeIndex >= steps.length - 1) return Math.min(safeIndex, Math.max(0, steps.length - 1));
+    const step = steps[safeIndex];
+    if (
+      step?.advance?.mode === "urlMatch" &&
+      step.advance.value &&
+      matchesAdvanceUrl(currentUrl, step.advance.value)
+    ) {
+      return safeIndex + 1;
+    }
+    return safeIndex;
+  }
+
   return {
     createGuide,
     createBuilderResumeSession,
@@ -473,6 +488,7 @@
     createStep,
     deriveSafeUrlMatch,
     getTargetDisplayLabel,
+    getPlaybackResumeStepIndex,
     makeId,
     matchesAdvanceUrl,
     normalizeGuide,

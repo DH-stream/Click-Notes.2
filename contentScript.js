@@ -44,6 +44,8 @@
         return false;
       }
     });
+  const getPlaybackResumeStepIndex =
+    utils.getPlaybackResumeStepIndex || ((guide, stepIndex) => stepIndex || 0);
   const upsertGuideStep = utils.upsertGuideStep;
   const getTargetDisplayLabel = utils.getTargetDisplayLabel || (() => "Step target");
   const createBuilderResumeSession = utils.createBuilderResumeSession;
@@ -64,11 +66,13 @@
   let overlayPositionListenersActive = false;
   let selectionToastTimer = null;
   let celebrationTimer = null;
+  let playbackRenderVersion = 0;
+  let isPlaybackPreparing = false;
 
   function safeStorage(fn) {
     try {
       if (!chrome?.runtime?.id) return;
-      fn();
+      return fn();
     } catch (e) {
       if (e?.message?.includes("Extension context invalidated")) return;
       throw e;
@@ -93,6 +97,43 @@
   function clearBuilderUrlWatch() {
     if (builderUrlWatchTimer) clearInterval(builderUrlWatchTimer);
     builderUrlWatchTimer = null;
+  }
+
+  async function getCurrentTabId() {
+    if (!chrome?.runtime?.id || typeof chrome.runtime.sendMessage !== "function") return null;
+    try {
+      const response = await chrome.runtime.sendMessage({ type: "CLICK_GUIDE_GET_CURRENT_TAB_ID" });
+      return Number.isInteger(response?.tabId) ? response.tabId : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearAdvanceWatcher() {
+    if (urlWatchTimer) clearInterval(urlWatchTimer);
+    urlWatchTimer = null;
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  }
+
+  function wait(delay) {
+    return new Promise((resolve) => setTimeout(resolve, delay));
+  }
+
+  function persistActivePlayback() {
+    if (!activePlayback) return Promise.resolve();
+    const snapshot = {
+      guide: activePlayback.guide,
+      stepIndex: activePlayback.stepIndex,
+      tabId: activePlayback.tabId,
+    };
+    return safeStorage(() => chrome.storage.local.set({ activePlayback: snapshot }));
+  }
+
+  function clearPersistedPlayback() {
+    safeStorage(() => chrome.storage.local.remove("activePlayback"));
   }
 
   function watchBuilderResumeSession() {
@@ -422,11 +463,10 @@
     clearHover();
     removeInlineEditor();
     if (overlayLayer) overlayLayer.innerHTML = "";
-    if (urlWatchTimer) clearInterval(urlWatchTimer);
+    clearAdvanceWatcher();
     if (celebrationTimer) clearTimeout(celebrationTimer);
     if (builderPinsRaf) cancelAnimationFrame(builderPinsRaf);
     builderPinsRaf = null;
-    urlWatchTimer = null;
     celebrationTimer = null;
   }
 
@@ -654,7 +694,7 @@
     return null;
   }
 
-  function resolvePlaybackTarget(step) {
+  function resolvePlaybackTarget(step, { allowRectFallback = true } = {}) {
     if (step?.target?.anchorMode === "rect") {
       if (!isSafeRectFallback(step)) return null;
       const rect = getFallbackRect(step);
@@ -663,9 +703,47 @@
 
     const element = findTargetElement(step);
     if (element && isResolvedElementTrustworthy(element, step)) return { element, rectFallback: false };
+    if (!allowRectFallback) return null;
     if (!isSafeRectFallback(step)) return null;
     const rect = getFallbackRect(step);
     return rect ? { rect, rectFallback: true } : null;
+  }
+
+  async function resolvePlaybackTargetWithRetry(step, renderVersion, shouldRetry) {
+    if (!shouldRetry || step?.target?.anchorMode === "rect") return resolvePlaybackTarget(step);
+    const timeout = prefersReducedMotion() ? 700 : 3200;
+    const deadline = Date.now() + timeout;
+    do {
+      const exactTarget = resolvePlaybackTarget(step, { allowRectFallback: false });
+      if (exactTarget) return exactTarget;
+      if (renderVersion !== playbackRenderVersion || !activePlayback) return null;
+      await wait(120);
+    } while (Date.now() < deadline);
+    return resolvePlaybackTarget(step);
+  }
+
+  function waitForScrollSettle() {
+    if (prefersReducedMotion()) return Promise.resolve();
+    return new Promise((resolve) => {
+      const startedAt = performance.now();
+      let previousX = window.scrollX;
+      let previousY = window.scrollY;
+      let stableFrames = 0;
+      function check() {
+        const currentX = window.scrollX;
+        const currentY = window.scrollY;
+        stableFrames = currentX === previousX && currentY === previousY ? stableFrames + 1 : 0;
+        previousX = currentX;
+        previousY = currentY;
+        const elapsed = performance.now() - startedAt;
+        if ((elapsed >= 140 && stableFrames >= 3) || elapsed >= 900) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(check);
+      }
+      requestAnimationFrame(check);
+    });
   }
 
   function getResolvedTargetRect(resolvedTarget, step) {
@@ -1264,12 +1342,13 @@
       const action = event.target?.dataset?.action;
       if (event.target?.classList?.contains("click-guide-close") || action === "close")
         stopPlayback();
-      if (action === "retry") renderPlaybackStep();
+      if (action === "retry") renderPlaybackStep({ waitForTarget: true });
       if (action === "skip") goToStep(activePlayback.stepIndex + 1);
     });
   }
 
   function showCompletionCelebration() {
+    clearPersistedPlayback();
     mode = "idle";
     activePlayback = null;
     disableOverlayPositionListeners();
@@ -1291,27 +1370,37 @@
     celebrationTimer = setTimeout(clearOverlay, 4300);
   }
 
-  async function renderPlaybackStep({ autoScroll = true } = {}) {
+  async function renderPlaybackStep({ autoScroll = true, waitForTarget = false } = {}) {
     if (!activePlayback) return;
+    const renderVersion = ++playbackRenderVersion;
+    if (autoScroll) isPlaybackPreparing = true;
     const { guide, stepIndex } = activePlayback;
     const step = guide.steps[stepIndex];
     if (!step) return stopPlayback();
-    const resolvedTarget = resolvePlaybackTarget(step);
+    const isLastStep = stepIndex >= guide.steps.length - 1;
+    const resolvedTarget = await resolvePlaybackTargetWithRetry(step, renderVersion, waitForTarget);
+    if (renderVersion !== playbackRenderVersion || !activePlayback) return;
     if (!resolvedTarget) {
+      isPlaybackPreparing = false;
       renderMissingStep(step);
       return;
     }
     if (autoScroll && resolvedTarget.element && step.playback?.autoScroll !== false && !isElementVisible(resolvedTarget.element)) {
-      resolvedTarget.element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-      await new Promise((resolve) => setTimeout(resolve, 420));
+      resolvedTarget.element.scrollIntoView({
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
+        block: "center",
+        inline: "nearest",
+      });
+      await waitForScrollSettle();
     }
     if (autoScroll && resolvedTarget.rectFallback && step.playback?.autoScroll !== false) {
       window.scrollTo({
         top: Math.max(0, resolvedTarget.rect.documentY - window.innerHeight / 2),
-        behavior: "smooth",
+        behavior: prefersReducedMotion() ? "auto" : "smooth",
       });
-      await new Promise((resolve) => setTimeout(resolve, 420));
+      await waitForScrollSettle();
     }
+    if (renderVersion !== playbackRenderVersion || !activePlayback) return;
 
     const layer = ensureOverlayLayer();
     const rect = getResolvedTargetRect(resolvedTarget, step);
@@ -1319,7 +1408,7 @@
     positionDimLayer(layer, rect, resolvedTarget.rectFallback);
     if (step.playback?.highlightTarget !== false) {
       const highlight = document.createElement("div");
-      highlight.className = "click-guide-target-highlight";
+      highlight.className = `click-guide-target-highlight${resolvedTarget.rectFallback ? " click-guide-target-highlight-saved" : ""}`;
       highlight.style.left = `${resolvedTarget.rectFallback ? rect.documentX : rect.left + window.scrollX}px`;
       highlight.style.top = `${resolvedTarget.rectFallback ? rect.documentY : rect.top + window.scrollY}px`;
       highlight.style.width = `${Math.max(8, rect.width)}px`;
@@ -1337,6 +1426,7 @@
           <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
           <div class="click-guide-card-body">
             <div class="click-guide-count"></div>
+            <div class="click-guide-warning" hidden></div>
           </div>
           <div class="click-guide-footer">
             <button class="click-guide-back-button" type="button" data-action="prev"><span class="click-guide-back-icon">←</span>Previous</button>
@@ -1361,11 +1451,11 @@
       if (!compact) {
         popup.querySelector("h2").textContent = step.title || "Untitled step";
         popup.querySelector("p").textContent = step.body || "";
-        if (resolvedTarget.rectFallback) {
-          const warning = popup.querySelector(".click-guide-warning");
-          warning.hidden = false;
-          warning.textContent = "The page changed, so this step is shown near the saved spot.";
-        }
+      }
+      if (resolvedTarget.rectFallback) {
+        const warning = popup.querySelector(".click-guide-warning");
+        warning.hidden = false;
+        warning.textContent = "Showing the saved position for this step.";
       }
       popup.querySelector(".click-guide-count").textContent = `Step ${stepIndex + 1} of ${guide.steps.length}`;
       popup.querySelector('[data-action="prev"]').disabled = stepIndex === 0;
@@ -1381,14 +1471,16 @@
       popup.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const action = event.target?.dataset?.action;
+        const action = event.target?.closest("[data-action]")?.dataset?.action;
         if (event.target?.classList?.contains("click-guide-close")) stopPlayback();
         if (action === "prev") goToStep(activePlayback.stepIndex - 1);
         if (action === "next") goToStep(activePlayback.stepIndex + 1);
         if (action === "close") stopPlayback();
       });
     }
-    watchAdvanceMode(step);
+    isPlaybackPreparing = false;
+    if (!isLastStep) watchAdvanceMode(step);
+    else clearAdvanceWatcher();
   }
 
   function elFromHtml(html) {
@@ -1398,51 +1490,51 @@
   }
 
   function watchAdvanceMode(step) {
-    if (urlWatchTimer) clearInterval(urlWatchTimer);
-    urlWatchTimer = null;
+    clearAdvanceWatcher();
+    if (!activePlayback) return;
+    const watchedStepIndex = activePlayback.stepIndex;
     if (step.advance?.mode === "elementVisible" && step.advance?.value) {
       urlWatchTimer = setInterval(() => {
+        if (!activePlayback || activePlayback.stepIndex !== watchedStepIndex) return clearAdvanceWatcher();
         try {
           const element = document.querySelector(step.advance.value);
           if (element instanceof HTMLElement && isElementVisible(element))
-            goToStep(activePlayback.stepIndex + 1);
+            goToStep(watchedStepIndex + 1, { waitForTarget: true });
         } catch {}
       }, 600);
       return;
     }
     if (step.advance?.mode !== "urlMatch" || !step.advance?.value) return;
     urlWatchTimer = setInterval(() => {
+      if (!activePlayback || activePlayback.stepIndex !== watchedStepIndex) return clearAdvanceWatcher();
       if (matchesAdvanceUrl(window.location.href, step.advance.value)) {
-        goToStep(activePlayback.stepIndex + 1);
+        goToStep(watchedStepIndex + 1, { waitForTarget: true });
       }
     }, 600);
   }
 
-  function goToStep(stepIndex) {
+  async function goToStep(stepIndex, { waitForTarget = false } = {}) {
     if (!activePlayback) return;
     if (stepIndex < 0) return;
+    clearAdvanceWatcher();
+    playbackRenderVersion += 1;
+    isPlaybackPreparing = false;
     if (stepIndex >= activePlayback.guide.steps.length) return showCompletionCelebration();
     const nextStep = activePlayback.guide.steps[stepIndex];
     const nextPage = nextStep?.pageUrl || activePlayback.guide.startUrl;
     const safeNextPage = normalizeGuideUrl(nextPage);
+    activePlayback.stepIndex = stepIndex;
+    await persistActivePlayback();
+    if (!activePlayback || activePlayback.stepIndex !== stepIndex) return;
     if (safeNextPage && normalizeGuideUrl(window.location.href) !== safeNextPage) {
-      safeStorage(() =>
-        chrome.storage.local.set({
-          activePlayback: {
-            guide: activePlayback.guide,
-            stepIndex,
-            tabId: activePlayback.tabId,
-          },
-        }),
-      );
       window.location.assign(safeNextPage);
       return;
     }
-    activePlayback.stepIndex = stepIndex;
-    renderPlaybackStep();
+    renderPlaybackStep({ waitForTarget });
   }
 
   function stopPlayback() {
+    clearPersistedPlayback();
     mode = "idle";
     activePlayback = null;
     disableOverlayPositionListeners();
@@ -1450,7 +1542,7 @@
   }
 
   function scheduleReposition() {
-    if (repositionRaf || mode !== "playing-guide") return;
+    if (repositionRaf || mode !== "playing-guide" || isPlaybackPreparing) return;
     repositionRaf = requestAnimationFrame(() => {
       repositionRaf = null;
       renderPlaybackStep({ autoScroll: false });
@@ -1611,7 +1703,8 @@
       mode = "playing-guide";
       enableOverlayPositionListeners();
       activePlayback = { guide: message.guide, stepIndex: message.stepIndex || 0, tabId: message.tabId };
-      renderPlaybackStep().then(() => sendResponse({ ok: true }));
+      persistActivePlayback();
+      renderPlaybackStep({ waitForTarget: true }).then(() => sendResponse({ ok: true }));
       return true;
     }
     if (message.type === "CLICK_GUIDE_STOP_PLAYBACK") {
@@ -1625,11 +1718,19 @@
   safeStorage(() =>
     chrome.storage.local.get({ activePlayback: null }).then(({ activePlayback: stored }) => {
       if (!stored?.guide) return;
-      chrome.storage.local.remove("activePlayback");
-      mode = "playing-guide";
-      enableOverlayPositionListeners();
-      activePlayback = { guide: stored.guide, stepIndex: stored.stepIndex || 0, tabId: stored.tabId };
-      renderPlaybackStep();
+      getCurrentTabId().then((currentTabId) => {
+        if (Number.isInteger(stored.tabId) && currentTabId !== stored.tabId) return;
+        mode = "playing-guide";
+        enableOverlayPositionListeners();
+        const stepIndex = getPlaybackResumeStepIndex(
+          stored.guide,
+          stored.stepIndex || 0,
+          window.location.href,
+        );
+        activePlayback = { guide: stored.guide, stepIndex, tabId: stored.tabId };
+        persistActivePlayback();
+        renderPlaybackStep({ waitForTarget: true });
+      });
     }),
   );
 
