@@ -1362,15 +1362,25 @@
     const celebration = document.createElement("div");
     celebration.id = "click-guide-celebration";
     celebration.setAttribute("role", "status");
+    const iconUrl = chrome.runtime.getURL("icons/icon128.png");
     celebration.innerHTML = `
-      <div class="click-guide-celebration-burst" aria-hidden="true">
-        <span></span><span></span><span></span><span></span><span></span>
+      <div class="click-guide-finish-visual" aria-hidden="true">
+        <img class="click-guide-finish-logo" src="${iconUrl}" alt="" />
+        <svg class="click-guide-finish-check" viewBox="0 0 120 90" aria-hidden="true" focusable="false">
+          <path d="M14 50 L43 78 L106 12"></path>
+        </svg>
+        <div class="click-guide-finish-confetti">
+          <span></span><span></span><span></span><span></span>
+          <span></span><span></span><span></span><span></span>
+        </div>
       </div>
-      <strong>Guide complete</strong>
-      <span>Nice work.</span>
+      <div class="click-guide-finish-copy">
+        <strong>Guide complete</strong>
+        <span>Nice work.</span>
+      </div>
     `;
     layer.append(celebration);
-    celebrationTimer = setTimeout(clearOverlay, 4300);
+    celebrationTimer = setTimeout(clearOverlay, 2900);
   }
 
   async function renderPlaybackStep({ autoScroll = true, waitForTarget = false } = {}) {
