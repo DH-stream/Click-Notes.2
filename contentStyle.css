@@ -513,7 +513,7 @@
   transform: translate(-50%, -50%);
   animation:
     click-guide-finish-card-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both,
-    click-guide-finish-card-out 620ms ease-in 2200ms both;
+    click-guide-finish-card-out 620ms cubic-bezier(0.23, 1, 0.32, 1) 2200ms both;
 }
 
 .click-guide-finish-visual {
@@ -531,22 +531,40 @@
   border-radius: 18px;
   object-fit: contain;
   filter: drop-shadow(0 10px 24px rgba(0, 95, 184, 0.22));
-  animation: click-guide-finish-logo-collapse 680ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: 28% 62%;
+  animation: click-guide-finish-logo-collapse 680ms cubic-bezier(0.77, 0, 0.175, 1) both;
+}
+
+.click-guide-finish-bridge-dot {
+  position: absolute;
+  left: 42px;
+  top: 64px;
+  z-index: 2;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: #005fb8;
+  box-shadow:
+    0 0 0 0 rgba(0, 95, 184, 0.28),
+    0 8px 18px rgba(0, 95, 184, 0.2);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.52);
+  animation: click-guide-finish-bridge-pulse 520ms cubic-bezier(0.23, 1, 0.32, 1) 420ms both;
 }
 
 .click-guide-finish-check {
   position: absolute;
   left: 50%;
-  top: 36px;
-  width: 60px;
-  height: 48px;
+  top: 34px;
+  width: 64px;
+  height: 50px;
   color: #005fb8;
   opacity: 0;
   transform: translateX(-50%) scale(0.86);
   z-index: 1;
   animation:
-    click-guide-finish-check-in 680ms cubic-bezier(0.16, 1, 0.3, 1) 480ms both,
-    click-guide-finish-check-release 520ms ease-out 1650ms both;
+    click-guide-finish-check-in 680ms cubic-bezier(0.23, 1, 0.32, 1) 540ms both,
+    click-guide-finish-check-release 520ms cubic-bezier(0.23, 1, 0.32, 1) 1400ms both;
 }
 
 .click-guide-finish-check path {
@@ -557,7 +575,7 @@
   stroke-linejoin: round;
   stroke-dasharray: 150;
   stroke-dashoffset: 150;
-  animation: click-guide-finish-check-path 680ms ease-out 480ms both;
+  animation: click-guide-finish-check-path 680ms cubic-bezier(0.23, 1, 0.32, 1) 540ms both;
 }
 
 .click-guide-finish-copy {
@@ -597,7 +615,7 @@
   background: #005fb8;
   opacity: 0;
   transform-origin: center;
-  animation: click-guide-finish-confetti 900ms cubic-bezier(0.16, 1, 0.3, 1) 720ms both;
+  animation: click-guide-finish-confetti 760ms cubic-bezier(0.23, 1, 0.32, 1) 980ms both;
 }
 
 .click-guide-finish-confetti span:nth-child(1) { --x: -34px; --y: -30px; --r: -18deg; background: #005fb8; }
@@ -666,19 +684,54 @@
 @keyframes click-guide-finish-logo-collapse {
   0% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    filter: drop-shadow(0 10px 24px rgba(0, 95, 184, 0.22)) blur(0);
+    transform: translate(0, 0) scale(1);
   }
-  38% {
+  32% {
     opacity: 1;
-    transform: translateY(0) scale(1.04);
+    filter: drop-shadow(0 12px 28px rgba(0, 95, 184, 0.24)) blur(0);
+    transform: translate(-2px, 0) scale(1.03);
   }
-  74% {
-    opacity: 0.45;
-    transform: translateY(22px) scale(0.42);
+  72% {
+    opacity: 0.58;
+    filter: drop-shadow(0 7px 16px rgba(0, 95, 184, 0.18)) blur(0.7px);
+    transform: translate(-20px, 24px) scale(0.38);
   }
   100% {
     opacity: 0;
-    transform: translateY(28px) scale(0.2);
+    filter: drop-shadow(0 4px 10px rgba(0, 95, 184, 0.08)) blur(1.4px);
+    transform: translate(-26px, 30px) scale(0.16);
+  }
+}
+
+@keyframes click-guide-finish-bridge-pulse {
+  0% {
+    opacity: 0;
+    box-shadow:
+      0 0 0 0 rgba(0, 95, 184, 0),
+      0 8px 18px rgba(0, 95, 184, 0);
+    transform: translate(-50%, -50%) scale(0.32);
+  }
+  38% {
+    opacity: 0.92;
+    box-shadow:
+      0 0 0 7px rgba(0, 95, 184, 0.16),
+      0 8px 18px rgba(0, 95, 184, 0.2);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  72% {
+    opacity: 0.72;
+    box-shadow:
+      0 0 0 12px rgba(0, 95, 184, 0),
+      0 8px 18px rgba(0, 95, 184, 0.12);
+    transform: translate(-50%, -50%) scale(0.68);
+  }
+  100% {
+    opacity: 0;
+    box-shadow:
+      0 0 0 12px rgba(0, 95, 184, 0),
+      0 8px 18px rgba(0, 95, 184, 0);
+    transform: translate(-50%, -50%) scale(0.42);
   }
 }
 
@@ -691,11 +744,11 @@
 @keyframes click-guide-finish-check-in {
   0% {
     opacity: 0;
-    transform: translateX(-50%) translateY(14px) scale(0.28);
+    transform: translateX(-50%) translate(-10px, 20px) scale(0.24);
   }
-  62% {
-    opacity: 0.92;
-    transform: translateX(-50%) translateY(0) scale(0.98);
+  46% {
+    opacity: 0.9;
+    transform: translateX(-50%) translate(-6px, 10px) scale(0.58);
   }
   100% {
     opacity: 0.86;
@@ -734,6 +787,7 @@
   .click-guide-step-pin,
   #click-guide-celebration,
   .click-guide-finish-logo,
+  .click-guide-finish-bridge-dot,
   .click-guide-finish-check,
   .click-guide-finish-check path,
   .click-guide-finish-confetti span {
@@ -745,7 +799,8 @@
     transform: translate(-50%, -50%);
   }
 
-  .click-guide-finish-logo {
+  .click-guide-finish-logo,
+  .click-guide-finish-bridge-dot {
     opacity: 0;
   }
 

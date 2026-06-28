@@ -1366,6 +1366,7 @@
     celebration.innerHTML = `
       <div class="click-guide-finish-visual" aria-hidden="true">
         <img class="click-guide-finish-logo" src="${iconUrl}" alt="" />
+        <span class="click-guide-finish-bridge-dot"></span>
         <svg class="click-guide-finish-check" viewBox="0 0 120 90" aria-hidden="true" focusable="false">
           <path d="M14 50 L43 78 L106 12"></path>
         </svg>
