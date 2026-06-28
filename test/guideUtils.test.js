@@ -8,6 +8,7 @@ const {
   createStep,
   deriveSafeUrlMatch,
   getTargetDisplayLabel,
+  getPlaybackResumeStepIndex,
   matchesAdvanceUrl,
   normalizeGuide,
   normalizeGuideUrl,
@@ -17,6 +18,27 @@ const {
   shouldResumeBuilderSession,
   upsertGuideStep,
 } = require("../guideUtils.js");
+
+test("playback resume advances a URL step exactly once after navigation", () => {
+  const guide = {
+    steps: [
+      { advance: { mode: "urlMatch", value: "/next" } },
+      { advance: { mode: "manual" } },
+    ],
+  };
+
+  assert.equal(getPlaybackResumeStepIndex(guide, 0, "https://example.com/next"), 1);
+  assert.equal(getPlaybackResumeStepIndex(guide, 1, "https://example.com/next"), 1);
+  assert.equal(getPlaybackResumeStepIndex(guide, 0, "https://example.com/other"), 0);
+});
+
+test("playback resume never auto-completes the final step", () => {
+  const guide = {
+    steps: [{ advance: { mode: "urlMatch", value: "/done" } }],
+  };
+
+  assert.equal(getPlaybackResumeStepIndex(guide, 0, "https://example.com/done"), 0);
+});
 
 test("getTargetDisplayLabel describes saved targets without technical jargon", () => {
   assert.equal(getTargetDisplayLabel({ fallbackTagName: "button" }), "Button");

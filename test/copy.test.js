@@ -10,7 +10,8 @@ const popup = fs.readFileSync(path.join(root, "popup.js"), "utf8");
 test("playback fallback and missing states use plain language", () => {
   assert.match(contentScript, /Target not found/);
   assert.match(contentScript, /This part of the page may have changed or not loaded yet\./);
-  assert.match(contentScript, /The page changed, so this step is shown near the saved spot\./);
+  assert.match(contentScript, /Showing the saved position for this step\./);
+  assert.doesNotMatch(contentScript, /The page changed, so this step is shown near the saved spot\./);
   assert.doesNotMatch(contentScript, /Element not found/);
   assert.doesNotMatch(contentScript, /Original element not found/);
 });
