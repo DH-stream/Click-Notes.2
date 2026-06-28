@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Click Guide playback preview</title>
+  <style>
+    :root {
+      color: #202124;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #eef2f7;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, rgba(168, 200, 255, 0.24), transparent 34rem),
+        linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+      color: #202124;
+    }
+
+    .preview-shell {
+      width: min(100%, 1040px);
+      margin: 0 auto;
+      padding: 32px 16px 40px;
+    }
+
+    .preview-header {
+      display: grid;
+      gap: 8px;
+      margin: 0 auto 18px;
+      text-align: center;
+    }
+
+    .preview-header h1 {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 36px);
+      line-height: 1.1;
+    }
+
+    .preview-header p {
+      margin: 0 auto;
+      max-width: 620px;
+      color: #64748b;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .preview-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin: 0 auto 18px;
+    }
+
+    .preview-tabs button,
+    .preview-replay {
+      border: 1px solid #cbd5e1;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.82);
+      color: #334155;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 9px 13px;
+      transition: background 120ms, border-color 120ms, color 120ms, box-shadow 120ms;
+    }
+
+    .preview-tabs button:hover,
+    .preview-replay:hover { border-color: #94a3b8; }
+
+    .preview-tabs button[aria-selected="true"],
+    .preview-replay {
+      border-color: #00488d;
+      background: #00488d;
+      color: #fff;
+      box-shadow: 0 10px 22px rgba(0, 72, 141, 0.16);
+    }
+
+    .preview-scene {
+      position: relative;
+      min-height: 660px;
+      overflow: hidden;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      border-radius: 24px;
+      background: #f8fafc;
+      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.12);
+    }
+
+    .mock-page {
+      position: absolute;
+      inset: 24px;
+      overflow: hidden;
+      border-radius: 18px;
+      background: #fff;
+      box-shadow: 0 12px 36px rgba(15, 23, 42, 0.08);
+    }
+
+    .mock-topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 72px;
+      padding: 18px 24px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .mock-brand { font-size: 18px; font-weight: 800; }
+    .mock-pill { border-radius: 999px; background: #eef6ff; color: #00488d; font-size: 12px; font-weight: 750; padding: 8px 12px; }
+
+    .mock-content {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(240px, 0.8fr);
+      gap: 22px;
+      padding: 28px;
+    }
+
+    .mock-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 16px;
+      background: #fff;
+      padding: 20px;
+    }
+
+    .mock-card h2, .mock-card h3 { margin: 0 0 10px; }
+    .mock-card p { margin: 0; color: #64748b; line-height: 1.5; }
+    .mock-list { display: grid; gap: 12px; margin-top: 16px; }
+    .mock-item { display: flex; justify-content: space-between; gap: 12px; border-radius: 12px; background: #f8fafc; padding: 14px; }
+    .mock-action { display: inline-flex; align-items: center; justify-content: center; min-width: 136px; min-height: 42px; border-radius: 10px; background: #00488d; color: #fff; font-weight: 800; }
+
+    .preview-state { display: none; position: absolute; inset: 0; }
+    .preview-state.is-active { display: block; }
+    .preview-replay-wrap { position: absolute; left: 50%; top: 28px; z-index: 4; transform: translateX(-50%); }
+
+    .click-guide-target-highlight {
+      position: absolute;
+      border: 2px solid rgba(0, 95, 184, 0.96);
+      border-radius: 10px;
+      background: rgba(0, 95, 184, 0.07);
+      box-shadow: 0 0 28px 6px rgba(0, 95, 184, 0.28);
+      box-sizing: border-box;
+      pointer-events: none;
+      animation: click-guide-target-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both, click-guide-target-pulse 900ms ease-out 220ms both;
+    }
+
+    .click-guide-target-highlight-saved {
+      border-color: rgba(100, 116, 139, 0.96);
+      background: rgba(148, 163, 184, 0.1);
+      box-shadow: 0 0 26px 6px rgba(148, 163, 184, 0.26);
+    }
+
+    #click-guide-popup {
+      position: absolute;
+      z-index: 3;
+      width: min(320px, calc(100% - 24px));
+      padding: 0;
+      overflow: visible;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 18px 42px rgba(15, 23, 42, 0.13), 0 1px 2px rgba(15, 23, 42, 0.08);
+      color: #202124;
+      font-size: 13px;
+      pointer-events: auto;
+      animation: click-guide-popup-in 180ms ease-out both;
+    }
+
+    #click-guide-popup h2 { margin: 12px 34px 5px 0; font-size: 18px; line-height: 1.22; font-weight: 700; color: #202124; }
+    #click-guide-popup p { margin: 0; color: #4b5563; font-size: 15px; line-height: 1.38; white-space: pre-wrap; }
+    .click-guide-card-body { padding: 22px 16px 24px; }
+    .click-guide-count { margin: 0; color: #00488d; font-size: 12px; font-weight: 750; letter-spacing: 0.08em; line-height: 1; text-transform: uppercase; }
+    .click-guide-warning { margin-top: 12px; padding: 7px 8px; border: 1px solid rgba(100, 116, 139, 0.22); border-radius: 6px; background: rgba(241, 245, 249, 0.9); color: #475569; font-size: 11px; line-height: 1.4; }
+    .click-guide-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 69px; padding: 16px; border-top: 1px solid #e5e7eb; }
+    #click-guide-popup button { border: 0; border-radius: 0; background: transparent; color: #5f6368; cursor: pointer; font: inherit; font-size: 14px; line-height: 1; padding: 0; }
+    #click-guide-popup button:disabled { opacity: 0.42; cursor: default; }
+    #click-guide-popup [data-action="next"] { min-width: 115px; min-height: 37px; border-radius: 0; padding: 0 15px; background: #00488d; color: #fff; font-size: 14px; font-weight: 750; line-height: 37px; text-align: center; }
+    #click-guide-popup [data-action="next"]:hover { background: #005fb8; }
+    .click-guide-back-button { display: inline-flex; align-items: center; gap: 7px; }
+    .click-guide-back-icon { font-size: 19px; line-height: 0; }
+    .click-guide-close { position: absolute; top: 10px; right: 9px; display: grid; place-items: center; width: 39px; height: 39px; color: #5e5e5e !important; font-size: 27px !important; font-weight: 300 !important; }
+
+    #click-guide-celebration {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      z-index: 3;
+      display: grid;
+      justify-items: center;
+      gap: 10px;
+      width: 230px;
+      min-height: 190px;
+      padding: 22px 22px 20px;
+      border: 1px solid rgba(194, 198, 212, 0.55);
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      color: #1c1b1b;
+      box-shadow: 0 24px 70px rgba(0, 72, 141, 0.18), 0 1px 0 rgba(255, 255, 255, 0.85) inset;
+      text-align: center;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      animation: click-guide-finish-card-in 320ms cubic-bezier(0.16, 1, 0.3, 1) both, click-guide-finish-card-out 620ms cubic-bezier(0.23, 1, 0.32, 1) 2200ms both;
+    }
+
+    .click-guide-finish-visual { position: relative; width: 124px; height: 104px; display: grid; place-items: center; }
+    .click-guide-finish-logo { position: absolute; width: 72px; height: 72px; border-radius: 18px; object-fit: contain; filter: drop-shadow(0 10px 24px rgba(0, 95, 184, 0.22)); transform-origin: 28% 62%; animation: click-guide-finish-logo-collapse 680ms cubic-bezier(0.77, 0, 0.175, 1) both; }
+    .click-guide-finish-bridge-dot { position: absolute; left: 42px; top: 64px; z-index: 2; width: 13px; height: 13px; border-radius: 999px; background: #005fb8; box-shadow: 0 0 0 0 rgba(0, 95, 184, 0.28), 0 8px 18px rgba(0, 95, 184, 0.2); opacity: 0; transform: translate(-50%, -50%) scale(0.52); animation: click-guide-finish-bridge-pulse 520ms cubic-bezier(0.23, 1, 0.32, 1) 420ms both; }
+    .click-guide-finish-check { position: absolute; left: 50%; top: 34px; width: 64px; height: 50px; color: #005fb8; opacity: 0; transform: translateX(-50%) scale(0.86); z-index: 1; animation: click-guide-finish-check-in 680ms cubic-bezier(0.23, 1, 0.32, 1) 540ms both, click-guide-finish-check-release 520ms cubic-bezier(0.23, 1, 0.32, 1) 1400ms both; }
+    .click-guide-finish-check path { fill: none; stroke: currentColor; stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 150; stroke-dashoffset: 150; animation: click-guide-finish-check-path 680ms cubic-bezier(0.23, 1, 0.32, 1) 540ms both; }
+    .click-guide-finish-copy { position: relative; z-index: 2; display: grid; gap: 5px; margin-top: -8px; }
+    .click-guide-finish-copy strong { font-size: 16px; line-height: 1.25; font-weight: 750; }
+    .click-guide-finish-copy span { color: #424752; font-size: 12px; line-height: 1.25; }
+    .click-guide-finish-confetti { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+    .click-guide-finish-confetti span { position: absolute; left: 50%; top: 52%; width: 5px; height: 12px; border-radius: 999px; background: #005fb8; opacity: 0; transform-origin: center; animation: click-guide-finish-confetti 760ms cubic-bezier(0.23, 1, 0.32, 1) 980ms both; }
+    .click-guide-finish-confetti span:nth-child(1) { --x: -34px; --y: -30px; --r: -18deg; background: #005fb8; }
+    .click-guide-finish-confetti span:nth-child(2) { --x: 34px; --y: -32px; --r: 18deg; background: #a8c8ff; }
+    .click-guide-finish-confetti span:nth-child(3) { --x: -42px; --y: -4px; --r: 28deg; background: #79dd68; }
+    .click-guide-finish-confetti span:nth-child(4) { --x: 42px; --y: 0; --r: -26deg; background: #ff9f2e; }
+    .click-guide-finish-confetti span:nth-child(5) { --x: -22px; --y: -44px; --r: 12deg; background: #00488d; }
+    .click-guide-finish-confetti span:nth-child(6) { --x: 22px; --y: -44px; --r: -20deg; background: #8b5cf6; }
+    .click-guide-finish-confetti span:nth-child(7) { --x: -24px; --y: 22px; --r: -12deg; background: #005fb8; }
+    .click-guide-finish-confetti span:nth-child(8) { --x: 24px; --y: 22px; --r: 12deg; background: #79dd68; }
+
+    @keyframes click-guide-target-in { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+    @keyframes click-guide-target-pulse { 0%, 100% { filter: brightness(1); } 45% { filter: brightness(1.08); } }
+    @keyframes click-guide-popup-in { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @keyframes click-guide-finish-card-in { from { opacity: 0; transform: translate(-50%, -44%) scale(0.94); } 58% { opacity: 1; transform: translate(-50%, -51%) scale(1.02); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+    @keyframes click-guide-finish-card-out { to { opacity: 0; transform: translate(-50%, -56%) scale(0.98); } }
+    @keyframes click-guide-finish-logo-collapse { 0% { opacity: 1; filter: drop-shadow(0 10px 24px rgba(0, 95, 184, 0.22)) blur(0); transform: translate(0, 0) scale(1); } 32% { opacity: 1; filter: drop-shadow(0 12px 28px rgba(0, 95, 184, 0.24)) blur(0); transform: translate(-2px, 0) scale(1.03); } 72% { opacity: 0.58; filter: drop-shadow(0 7px 16px rgba(0, 95, 184, 0.18)) blur(0.7px); transform: translate(-20px, 24px) scale(0.38); } 100% { opacity: 0; filter: drop-shadow(0 4px 10px rgba(0, 95, 184, 0.08)) blur(1.4px); transform: translate(-26px, 30px) scale(0.16); } }
+    @keyframes click-guide-finish-bridge-pulse { 0% { opacity: 0; box-shadow: 0 0 0 0 rgba(0, 95, 184, 0), 0 8px 18px rgba(0, 95, 184, 0); transform: translate(-50%, -50%) scale(0.32); } 38% { opacity: 0.92; box-shadow: 0 0 0 7px rgba(0, 95, 184, 0.16), 0 8px 18px rgba(0, 95, 184, 0.2); transform: translate(-50%, -50%) scale(1); } 72% { opacity: 0.72; box-shadow: 0 0 0 12px rgba(0, 95, 184, 0), 0 8px 18px rgba(0, 95, 184, 0.12); transform: translate(-50%, -50%) scale(0.68); } 100% { opacity: 0; box-shadow: 0 0 0 12px rgba(0, 95, 184, 0), 0 8px 18px rgba(0, 95, 184, 0); transform: translate(-50%, -50%) scale(0.42); } }
+    @keyframes click-guide-finish-check-path { to { stroke-dashoffset: 0; } }
+    @keyframes click-guide-finish-check-in { 0% { opacity: 0; transform: translateX(-50%) translate(-10px, 20px) scale(0.24); } 46% { opacity: 0.9; transform: translateX(-50%) translate(-6px, 10px) scale(0.58); } 100% { opacity: 0.86; transform: translateX(-50%) translateY(0) scale(0.78); } }
+    @keyframes click-guide-finish-check-release { to { opacity: 0; transform: translateX(-50%) translateY(-4px) scale(1.02); } }
+    @keyframes click-guide-finish-confetti { 0% { opacity: 0; transform: translate(-50%, -50%) translate(0, 0) rotate(0deg) scale(0.4); } 26% { opacity: 0.9; } 100% { opacity: 0; transform: translate(-50%, -50%) translate(var(--x), var(--y)) rotate(var(--r)) scale(0.9); } }
+
+    @media (max-width: 720px) {
+      .preview-shell { padding-top: 22px; }
+      .preview-scene { min-height: 720px; border-radius: 18px; }
+      .mock-page { inset: 12px; }
+      .mock-topbar { align-items: flex-start; flex-direction: column; padding: 16px; }
+      .mock-content { grid-template-columns: 1fr; padding: 16px; }
+      #click-guide-popup { left: 20px !important; right: 20px; top: auto !important; bottom: 28px; width: auto; }
+      .preview-tabs { justify-content: stretch; }
+      .preview-tabs button { flex: 1 1 140px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="preview-shell">
+    <header class="preview-header">
+      <h1>Click Guide playback preview</h1>
+      <p>Temporary standalone helper for visually reviewing playback UI states. This file is not used by the extension runtime.</p>
+    </header>
+
+    <nav class="preview-tabs" aria-label="Preview states">
+      <button type="button" data-preview-tab="normal" aria-selected="true">Normal step</button>
+      <button type="button" data-preview-tab="final" aria-selected="false">Final step</button>
+      <button type="button" data-preview-tab="finish" aria-selected="false">Finish animation</button>
+      <button type="button" data-preview-tab="saved" aria-selected="false">Saved position</button>
+    </nav>
+
+    <section class="preview-scene" aria-live="polite">
+      <div class="mock-page" aria-hidden="true">
+        <div class="mock-topbar"><div class="mock-brand">Hem-Listan</div><div class="mock-pill">Weekly planning</div></div>
+        <div class="mock-content">
+          <article class="mock-card">
+            <h2>Shopping list</h2>
+            <p>Review shared groceries, meals, and household tasks in one place.</p>
+            <div class="mock-list">
+              <div class="mock-item"><span>Milk</span><strong>2 l</strong></div>
+              <div class="mock-item"><span>Tomatoes</span><strong>6 pcs</strong></div>
+              <div class="mock-item"><span>Pasta</span><strong>1 pack</strong></div>
+            </div>
+          </article>
+          <aside class="mock-card">
+            <h3>Next action</h3>
+            <p>Use the guide to learn the flow without changing production behavior.</p>
+            <div style="height: 18px"></div>
+            <div class="mock-action">Add item</div>
+          </aside>
+        </div>
+      </div>
+
+      <div class="preview-state is-active" data-preview-state="normal">
+        <div class="click-guide-target-highlight" style="left: 658px; top: 304px; width: 144px; height: 50px;"></div>
+        <div id="click-guide-popup" style="left: 352px; top: 280px;">
+          <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
+          <div class="click-guide-card-body"><div class="click-guide-count">Step 2 of 4</div><h2>Add your first item</h2><p>Click the Add item button to add a grocery to the shared list.</p></div>
+          <div class="click-guide-footer"><button class="click-guide-back-button" type="button"><span class="click-guide-back-icon">←</span>Previous</button><button type="button" data-action="close">Close guide</button><button type="button" data-action="next">Continue →</button></div>
+        </div>
+      </div>
+
+      <div class="preview-state" data-preview-state="final">
+        <div class="click-guide-target-highlight" style="left: 72px; top: 248px; width: 526px; height: 226px;"></div>
+        <div id="click-guide-popup" style="left: 626px; top: 248px;">
+          <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
+          <div class="click-guide-card-body"><div class="click-guide-count">Step 4 of 4</div><h2>Review the completed list</h2><p>This is the final step before the completion animation confirms the guide is done.</p></div>
+          <div class="click-guide-footer"><button class="click-guide-back-button" type="button"><span class="click-guide-back-icon">←</span>Previous</button><button type="button" data-action="close">Close guide</button><button type="button" data-action="next">Finish</button></div>
+        </div>
+      </div>
+
+      <div class="preview-state" data-preview-state="finish">
+        <div class="preview-replay-wrap"><button class="preview-replay" type="button">Replay animation</button></div>
+        <div id="click-guide-celebration" role="status">
+          <div class="click-guide-finish-visual" aria-hidden="true">
+            <img class="click-guide-finish-logo" src="../icons/icon128.png" alt="" />
+            <span class="click-guide-finish-bridge-dot"></span>
+            <svg class="click-guide-finish-check" viewBox="0 0 120 90" aria-hidden="true" focusable="false"><path d="M14 50 L43 78 L106 12"></path></svg>
+            <div class="click-guide-finish-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
+          <div class="click-guide-finish-copy"><strong>Guide complete</strong><span>Nice work.</span></div>
+        </div>
+      </div>
+
+      <div class="preview-state" data-preview-state="saved">
+        <div class="click-guide-target-highlight click-guide-target-highlight-saved" style="left: 638px; top: 292px; width: 176px; height: 72px;"></div>
+        <div id="click-guide-popup" style="left: 292px; top: 252px;">
+          <button class="click-guide-close" type="button" aria-label="Close guide">x</button>
+          <div class="click-guide-card-body"><div class="click-guide-count">Step 3 of 4</div><h2>Continue from the saved target</h2><p>The original element could not be resolved, so the guide uses the saved position.</p><div class="click-guide-warning">Showing the saved position for this step.</div></div>
+          <div class="click-guide-footer"><button class="click-guide-back-button" type="button"><span class="click-guide-back-icon">←</span>Previous</button><button type="button" data-action="close">Close guide</button><button type="button" data-action="next">Continue →</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const tabs = document.querySelectorAll('[data-preview-tab]');
+    const states = document.querySelectorAll('[data-preview-state]');
+    const finishState = document.querySelector('[data-preview-state="finish"]');
+    const replayButton = document.querySelector('.preview-replay');
+
+    function replayFinishAnimation() {
+      const celebration = finishState.querySelector('#click-guide-celebration');
+      const clone = celebration.cloneNode(true);
+      celebration.replaceWith(clone);
+    }
+
+    function showState(name) {
+      tabs.forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.previewTab === name)));
+      states.forEach((state) => state.classList.toggle('is-active', state.dataset.previewState === name));
+      if (name === 'finish') requestAnimationFrame(replayFinishAnimation);
+    }
+
+    tabs.forEach((tab) => tab.addEventListener('click', () => showState(tab.dataset.previewTab)));
+    replayButton.addEventListener('click', replayFinishAnimation);
+  </script>
+</body>
+</html>
