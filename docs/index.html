@@ -114,6 +114,8 @@
     </section>
   </main>
   <script>
+    const previewIconUrl = "https://raw.githubusercontent.com/DH-stream/Click-Notes.2/main/icons/icon128.png";
+
     const mockGuide = {
       id: "mock-click-guide-preview",
       title: "Click Guide preview",
@@ -185,7 +187,7 @@
     function playCompletion() {
       isCompleted = true;
       clearTimeout(completionTimer);
-      layer.innerHTML = `<div id="click-guide-celebration" role="status"><div class="click-guide-finish-visual" aria-hidden="true"><img class="click-guide-finish-logo" src="../icons/icon128.png" alt="" /><span class="click-guide-finish-bridge-dot"></span><svg class="click-guide-finish-check" viewBox="0 0 120 90" aria-hidden="true" focusable="false"><path d="M14 50 L43 78 L106 12"></path></svg><div class="click-guide-finish-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div><div class="click-guide-finish-copy"><strong>Guide complete</strong><span>Nice work.</span></div></div>`;
+      layer.innerHTML = `<div id="click-guide-celebration" role="status"><div class="click-guide-finish-visual" aria-hidden="true"><img class="click-guide-finish-logo" src="${previewIconUrl}" alt="" /><span class="click-guide-finish-bridge-dot"></span><svg class="click-guide-finish-check" viewBox="0 0 120 90" aria-hidden="true" focusable="false"><path d="M14 50 L43 78 L106 12"></path></svg><div class="click-guide-finish-confetti"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div><div class="click-guide-finish-copy"><strong>Guide complete</strong><span>Nice work.</span></div></div>`;
       resetWrap.classList.remove('is-visible');
       completionTimer = setTimeout(() => resetWrap.classList.add('is-visible'), 2850);
     }
