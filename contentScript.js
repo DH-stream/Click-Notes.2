@@ -1366,14 +1366,11 @@
     celebration.innerHTML = `
       <div class="click-guide-finish-visual" aria-hidden="true">
         <img class="click-guide-finish-logo" src="${iconUrl}" alt="" />
+        <span class="click-guide-finish-halo"></span>
         <span class="click-guide-finish-bridge-dot"></span>
         <svg class="click-guide-finish-check" viewBox="0 0 120 90" aria-hidden="true" focusable="false">
-          <path d="M14 50 L43 78 L106 12"></path>
+          <path d="M16 48 L43 74 L104 14"></path>
         </svg>
-        <div class="click-guide-finish-confetti">
-          <span></span><span></span><span></span><span></span>
-          <span></span><span></span><span></span><span></span>
-        </div>
       </div>
       <div class="click-guide-finish-copy">
         <strong>Guide complete</strong>
@@ -1381,7 +1378,7 @@
       </div>
     `;
     layer.append(celebration);
-    celebrationTimer = setTimeout(clearOverlay, 2900);
+    celebrationTimer = setTimeout(clearOverlay, 3600);
   }
 
   async function renderPlaybackStep({ autoScroll = true, waitForTarget = false } = {}) {
